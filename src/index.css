@@ -1,0 +1,298 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+ *  Theme tokens — light & dark
+ *  See: docs/NoteForge_UI_设计稿.md §2.1
+ * ============================================================ */
+:root,
+.theme-light {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f6f8fa;
+  --color-bg-tertiary: #f0f2f5;
+  --color-surface: #ffffff;
+  --color-border: #e1e4e8;
+  --color-border-focus: #0969da;
+
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #656d76;
+  --color-text-tertiary: #8b949e;
+  --color-text-link: #0969da;
+  --color-text-link-hover: #0550ae;
+
+  --color-accent: #0969da;
+  --color-accent-hover: #0860ca;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-danger: #cf222e;
+  --color-info: #0969da;
+
+  --color-diff-insert: #d2f4d4;
+  --color-diff-delete: #ffd7d5;
+
+  --color-tag-bg: #ddf4ff;
+  --color-tag-text: #0969da;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.14);
+
+  color-scheme: light;
+}
+
+.dark,
+.theme-dark {
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #21262d;
+  --color-surface: #1c2128;
+  --color-border: #30363d;
+  --color-border-focus: #58a6ff;
+
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-tertiary: #6e7681;
+  --color-text-link: #58a6ff;
+  --color-text-link-hover: #79c0ff;
+
+  --color-accent: #58a6ff;
+  --color-accent-hover: #79c0ff;
+  --color-success: #3fb950;
+  --color-warning: #d29922;
+  --color-danger: #f85149;
+  --color-info: #58a6ff;
+
+  --color-diff-insert: #1b3c1f;
+  --color-diff-delete: #3c1f1b;
+
+  --color-tag-bg: #1f3a5f;
+  --color-tag-text: #79c0ff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* ------------------------------------------------------------------
+ *  Scrollbars — subtle, theme-aware
+ * ------------------------------------------------------------------ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+  border: 2px solid var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Tab strip — horizontal scroll without visible scrollbar (IDEA-style) */
+.tab-strip-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tab-strip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ------------------------------------------------------------------
+ *  Utility components
+ * ------------------------------------------------------------------ */
+@layer components {
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-sm border border-transparent
+      bg-transparent px-3 py-1.5 text-sm font-medium text-text-primary transition-colors
+      hover:bg-bg-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white hover:bg-accent-hover hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-bg-tertiary;
+  }
+
+  .btn-danger {
+    @apply text-danger hover:bg-bg-tertiary;
+  }
+
+  .btn-icon {
+    @apply h-7 w-7 p-0;
+  }
+
+  .input {
+    @apply w-full rounded-sm border border-border bg-bg-primary px-2 py-1 text-sm text-text-primary
+      placeholder:text-text-tertiary focus:border-border-focus focus:outline-none;
+  }
+
+  .panel {
+    @apply rounded-md border border-border bg-surface;
+  }
+
+  .tag-chip {
+    @apply inline-flex items-center gap-1 rounded-sm bg-tag-bg px-1.5 py-0.5 text-xs font-medium
+      leading-none text-tag-text;
+  }
+
+  .splash-grid {
+    background-image: radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black 20%, transparent 75%);
+  }
+
+  .kbd {
+    @apply inline-flex h-5 items-center rounded-sm border border-border bg-bg-tertiary px-1.5
+      font-mono text-xs text-text-secondary;
+  }
+
+  .divider {
+    @apply border-t border-border;
+  }
+
+  /* Markdown preview area */
+  .markdown-body {
+    color: var(--color-text-primary);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  .markdown-body h1 {
+    @apply mt-4 mb-3 border-b border-border pb-2 text-2xl font-semibold;
+  }
+  .markdown-body h2 {
+    @apply mt-4 mb-2 border-b border-border pb-1 text-xl font-semibold;
+  }
+  .markdown-body h3 {
+    @apply mt-3 mb-2 text-lg font-semibold;
+  }
+  .markdown-body p,
+  .markdown-body ul,
+  .markdown-body ol,
+  .markdown-body blockquote {
+    @apply my-2;
+  }
+  .markdown-body code {
+    @apply rounded-sm bg-bg-tertiary px-1 py-0.5 font-mono text-[13px];
+  }
+  .markdown-body pre {
+    @apply my-3 overflow-x-auto rounded-md bg-bg-tertiary p-3 font-mono text-[13px];
+  }
+  .markdown-body pre code {
+    @apply bg-transparent p-0;
+  }
+  .markdown-body blockquote {
+    @apply border-l-4 border-border pl-3 italic text-text-secondary;
+  }
+  .markdown-body ul,
+  .markdown-body ol {
+    @apply ml-5 list-outside;
+  }
+  .markdown-body ul {
+    @apply list-disc;
+  }
+  .markdown-body ol {
+    @apply list-decimal;
+  }
+  .markdown-body table {
+    @apply my-3 w-full border-collapse;
+  }
+  .markdown-body th,
+  .markdown-body td {
+    @apply border border-border px-2 py-1 text-left;
+  }
+  .markdown-body th {
+    @apply bg-bg-secondary font-semibold;
+  }
+  .markdown-body a.wiki-link {
+    @apply text-text-link no-underline hover:text-text-link-hover hover:underline;
+  }
+  .markdown-body a.wiki-link.missing {
+    @apply text-danger;
+  }
+  .markdown-body a.wiki-link.missing::after {
+    content: " ⚠";
+    font-size: 0.85em;
+  }
+  .markdown-body span.hashtag {
+    @apply mr-1 inline-flex cursor-pointer items-center gap-1 rounded-sm bg-tag-bg px-1.5
+      py-0.5 text-xs font-medium leading-none text-tag-text;
+  }
+  .markdown-body hr {
+    @apply my-4 border-border;
+  }
+  .markdown-body img {
+    @apply max-w-full rounded-md;
+  }
+  .markdown-body input[type="checkbox"] {
+    @apply mr-2;
+  }
+
+  .markdown-body .md-block {
+    @apply rounded-md transition-colors duration-150;
+  }
+
+  .markdown-body-editable .md-block {
+    @apply cursor-text;
+  }
+
+  .markdown-body-editable .md-block:hover {
+    background-color: color-mix(in srgb, var(--color-bg-tertiary) 40%, transparent);
+  }
+
+  .markdown-body .md-block[data-md-active="true"] {
+    background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 25%, transparent);
+  }
+
+  .markdown-body-editable .md-block[data-md-active="true"]:hover {
+    background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  }
+}
+
+/* Hide focus ring on mouse, show on keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
+}

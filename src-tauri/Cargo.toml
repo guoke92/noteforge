@@ -1,0 +1,39 @@
+[package]
+name = "noteforge"
+version = "0.1.0"
+edition = "2021"
+description = "NoteForge Backend - Tauri v2 Rust backend"
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.10"
+anyhow = "1"
+thiserror = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.31", features = ["bundled", "modern_sqlite"] }
+notify = "6"
+reqwest = { version = "0.12", features = ["json"] }
+ring = "0.17"
+aes-gcm = "0.10"
+fastembed = "4"
+tempfile = "3"
+walkdir = "2"
+glob = "0.3"
+diff = "0.1"
+regex = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[lib]
+name = "noteforge_lib"
+crate-type = ["lib", "cdylib", "staticlib"]

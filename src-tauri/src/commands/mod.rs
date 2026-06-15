@@ -1,0 +1,13 @@
+pub mod workspace;
+pub mod file;
+pub mod editor;
+pub mod knowledge;
+pub mod memory;
+pub mod ai;
+pub mod search;
+pub mod encryption;
+pub mod config;
+pub mod scratch;
+pub mod workbench_session;
+pub mod workspace_draft;
+pub mod vault_watch;

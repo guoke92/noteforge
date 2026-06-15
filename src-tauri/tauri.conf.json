@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "NoteForge",
+  "version": "0.1.0",
+  "identifier": "com.noteforge.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NoteForge",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "decorations": true,
+        "transparent": false,
+        "fullscreen": false,
+        "resizable": true,
+        "backgroundColor": "#0d1117"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Knowledge management for humans and AI agents",
+    "longDescription": "NoteForge: a local-first, agent-aware knowledge management workspace.",
+    "icon": ["icons/icon.png"]
+  }
+}

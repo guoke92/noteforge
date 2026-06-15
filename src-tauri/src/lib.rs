@@ -1,0 +1,15 @@
+pub mod models;
+pub mod commands;
+pub mod db;
+pub mod error;
+pub mod knowledge;
+pub mod ai;
+pub mod encryption;
+pub mod watcher;
+pub mod config;
+pub mod vector;
+pub mod repositories;
+pub mod pipeline;
+pub mod scratch;
+pub mod workspace_draft;
+pub mod workbench_session;
