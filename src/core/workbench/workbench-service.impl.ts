@@ -6,17 +6,16 @@ import type { VaultService } from "../vault/service";
 import type { EventBus } from "../events";
 import {
   ensureDocumentTabInPane,
+  mountDeferredTabShell,
   syncDocumentToEditorTabs,
 } from "../bridge/editor-sync";
-import type { WorkbenchService } from "./service";
-import type {
-  LayoutState,
+import type { WorkbenchService, SessionPersistReason } from "./service";
+import type { LayoutState,
   PersistedPane,
   PersistedTabRef,
   WorkspaceSession,
 } from "./types";
 import { captureAllOpenTabViewStates } from "../session/tab-lifecycle";
-import { scratch } from "@/ipc";
 import { normalizeSurfaceMode } from "./types";
 import {
   clearLegacyScratchSession,
@@ -25,6 +24,16 @@ import {
   saveWorkspaceSession,
 } from "./session-storage";
 import { DEFAULT_PREFERENCES } from "../platform/config";
+import {
+  SESSION_PERSIST_CONTENT_DEBOUNCE_MS,
+  SESSION_PERSIST_LAYOUT_DEBOUNCE_MS,
+} from "../platform/timing";
+import { MAIN_PANE_ID } from "../bridge/tab-pane-utils";
+import {
+  createEphemeralFromScratchRestore,
+  loadScratchRestoreData,
+} from "../session/scratch-restore";
+import { perfAsync, perfLog, perfStart } from "@/lib/startup-perf";
 
 export interface WorkbenchServiceDeps {
   eventBus: EventBus;
@@ -33,13 +42,26 @@ export interface WorkbenchServiceDeps {
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let scheduledPersistReason: SessionPersistReason = "layout";
 let restoreInflight: Promise<boolean> | null = null;
 let lastPersistedVault: { id: string; rootPath: string } | null = null;
+/** Stable session fields for change detection (excludes savedAt). */
+let lastPersistedSessionFingerprint: string | null = null;
 /** While true, never write session — avoids wiping localStorage mid-restore. */
 let sessionPersistSuspended = false;
 
 function normalizeVaultPath(path: string): string {
   return path.replace(/\/+$/, "");
+}
+
+function sessionFingerprint(session: WorkspaceSession | null): string | null {
+  if (!session) return null;
+  const { savedAt: _savedAt, ...stable } = session;
+  return JSON.stringify(stable);
+}
+
+function seedPersistedSessionSnapshot(session: WorkspaceSession | null): void {
+  lastPersistedSessionFingerprint = sessionFingerprint(session);
 }
 
 function resolveVaultForSession(vault: VaultService): { id: string; rootPath: string } | null {
@@ -104,25 +126,30 @@ function buildPersistedTab(tabId: string, order: number): PersistedTabRef | null
   if (!tab) return null;
 
   const doc = getDocumentFromRuntime(tabId);
-  const vaultPath = doc?.vaultPath ?? (tab.path ? tab.path : null);
+  const vaultPath =
+    doc?.vaultPath ?? (tab.pendingRestore?.vaultPath ?? (tab.path ? tab.path : null));
   if (vaultPath && tab.kind !== "scratch") {
     return {
       vaultPath,
       order,
-      viewState: doc?.viewState ?? {
-        mode: tab.surfaceMode ?? DEFAULT_PREFERENCES.editor.defaultSurfaceMode,
-      },
+      viewState:
+        doc?.viewState ??
+        tab.pendingRestore?.viewState ?? {
+          mode: tab.surfaceMode ?? DEFAULT_PREFERENCES.editor.defaultSurfaceMode,
+        },
     };
   }
 
-  if (tab.kind === "scratch" && tab.scratchId) {
+  if (tab.kind === "scratch" && (tab.scratchId || tab.pendingRestore?.scratchId)) {
     return {
       vaultPath: null,
-      scratchId: tab.scratchId,
+      scratchId: tab.scratchId ?? tab.pendingRestore?.scratchId,
       order,
-      viewState: doc?.viewState ?? {
-        mode: tab.surfaceMode ?? DEFAULT_PREFERENCES.editor.defaultSurfaceMode,
-      },
+      viewState:
+        doc?.viewState ??
+        tab.pendingRestore?.viewState ?? {
+          mode: tab.surfaceMode ?? DEFAULT_PREFERENCES.editor.defaultSurfaceMode,
+        },
     };
   }
 
@@ -133,7 +160,9 @@ function buildPersistedTab(tabId: string, order: number): PersistedTabRef | null
 let documentRef: DocumentService;
 
 function getDocumentFromRuntime(tabId: string) {
-  return documentRef.get(tabId);
+  const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+  if (!tab || tab.pendingRestore) return null;
+  return documentRef.get(tab.documentId);
 }
 
 export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchService {
@@ -160,14 +189,16 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
     closeTab(documentId, paneId) {
       const editor = useEditorStore.getState();
       const pid = paneId ?? editor.activePaneId;
-      const hasTabInPane = editor.tabs.some((t) => t.id === documentId && t.paneId === pid);
-      if (!hasTabInPane) return;
+      const tab = editor.tabs.find((t) => t.documentId === documentId && t.paneId === pid);
+      if (!tab) return;
 
-      const inOtherPane = editor.tabs.some((t) => t.id === documentId && t.paneId !== pid);
+      const inOtherPane = editor.tabs.some(
+        (t) => t.documentId === documentId && t.paneId !== pid,
+      );
       if (inOtherPane) {
-        const tabs = editor.tabs.filter((t) => !(t.id === documentId && t.paneId === pid));
+        const tabs = editor.tabs.filter((t) => t.id !== tab.id);
         const map = { ...editor.activeTabIdByPane };
-        if (map[pid] === documentId) {
+        if (map[pid] === tab.id) {
           const remaining = tabs.filter((t) => t.paneId === pid);
           map[pid] = remaining.length ? remaining[remaining.length - 1]!.id : undefined;
         }
@@ -175,18 +206,16 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
         return;
       }
 
-      editor.requestCloseTab(documentId);
+      editor.requestCloseTab(tab.id);
     },
 
     setActiveTab(documentId, paneId) {
       const pid = paneId ?? useEditorStore.getState().activePaneId;
-      useEditorStore.setState({
-        activeTabIdByPane: {
-          ...useEditorStore.getState().activeTabIdByPane,
-          [pid]: documentId,
-        },
-        activePaneId: pid,
-      });
+      const tab = useEditorStore
+        .getState()
+        .tabs.find((t) => t.documentId === documentId && t.paneId === pid);
+      if (!tab) return;
+      useEditorStore.getState().setActive(tab.id);
     },
 
     pinTab(_documentId, _paneId, _pinned) {
@@ -195,29 +224,18 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
 
     moveTab(documentId, fromPane, toPane, index) {
       const editor = useEditorStore.getState();
-      const tab = editor.tabs.find((t) => t.id === documentId && t.paneId === fromPane);
+      const tab = editor.tabs.find(
+        (t) => t.documentId === documentId && t.paneId === fromPane,
+      );
       if (!tab) return;
-      const without = editor.tabs.filter((t) => !(t.id === documentId && t.paneId === fromPane));
-      const toTabs = without.filter((t) => t.paneId === toPane);
-      const others = without.filter((t) => t.paneId !== toPane);
-      const moved = { ...tab, paneId: toPane };
-      const insertAt = index ?? toTabs.length;
-      const nextToTabs = [...toTabs.slice(0, insertAt), moved, ...toTabs.slice(insertAt)];
-      useEditorStore.setState({
-        tabs: [...others, ...nextToTabs],
-        activeTabIdByPane: {
-          ...editor.activeTabIdByPane,
-          [toPane]: documentId,
-        },
-        activePaneId: toPane,
-      });
+      editor.moveTabToPane(tab.id, toPane);
     },
 
     reorderTab(_documentId, _paneId, _newIndex) {
       /* Phase 0 stub */
     },
 
-    splitRight(fromPaneId) {
+    splitRight(_fromPaneId) {
       return useEditorStore.getState().splitRight();
     },
 
@@ -270,17 +288,21 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
     },
 
     async restoreSession(session) {
-      if (restoreInflight) return restoreInflight;
+      if (restoreInflight) {
+        perfLog("workbench.restoreSession deduped (in-flight)");
+        return restoreInflight;
+      }
 
-      restoreInflight = (async () => {
+      restoreInflight = perfAsync("workbench.restoreSession", async () => {
         sessionPersistSuspended = true;
         let restoreSucceeded = false;
         try {
-          const payload = session ?? (await loadWorkspaceSession());
+          const payload = session !== undefined ? session : await loadWorkspaceSession();
           if (!payload) {
-            await restoreLegacyOnly();
+            await perfAsync("workbench.restoreLegacyOnly", () => restoreLegacyOnly());
             useEditorStore.setState({ sessionRestored: true });
             eventBus.emit({ type: "workbench:session-restored" });
+            perfLog("workbench.restoreSession no-v2-session");
             return false;
           }
 
@@ -289,16 +311,24 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
             const current = vault.getCurrent();
             if (!current || normalizeVaultPath(current.rootPath) !== savedRoot) {
               try {
-                await vault.open(savedRoot);
+                await perfAsync("workbench.restoreSession.vault.open", () => vault.open(savedRoot), {
+                  savedRoot,
+                });
               } catch (e) {
                 console.warn("Session vault open failed, restoring tabs anyway", e);
+                perfLog("workbench.restoreSession.vault.open failed", {
+                  error: e instanceof Error ? e.message : String(e),
+                });
               }
+            } else {
+              perfLog("workbench.restoreSession.vault.open skipped (already open)", { savedRoot });
             }
           }
 
           applyLayout(payload.layout);
+          perfLog("workbench.restoreSession.layout applied");
 
-          const paneIds = payload.panes.length ? payload.panes.map((p) => p.id) : ["pane-1"];
+          const paneIds = payload.panes.length ? payload.panes.map((p) => p.id) : [MAIN_PANE_ID];
           useEditorStore.setState({
             panes: paneIds,
             activePaneId: payload.activePaneId || paneIds[0]!,
@@ -314,6 +344,9 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
             return 0;
           });
 
+          let activeTabCount = 0;
+          let deferredTabCount = 0;
+
           for (const pane of paneOrder) {
             const sorted = [...pane.tabs].sort((a, b) => a.order - b.order);
             const activeIdx = Math.min(
@@ -321,14 +354,32 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
               Math.max(0, sorted.length - 1),
             );
             const activeRef = sorted[activeIdx];
-            const restoreOrder = activeRef
-              ? [activeRef, ...sorted.filter((t) => t !== activeRef)]
-              : sorted;
-            for (const tabRef of restoreOrder) {
+            for (const tabRef of sorted) {
               try {
-                await restoreTabRef(tabRef, pane.id, document);
+                if (tabRef === activeRef) {
+                  activeTabCount += 1;
+                  await perfAsync(
+                    "workbench.restoreTabRef.active",
+                    () => restoreTabRef(tabRef, pane.id, document),
+                    {
+                      paneId: pane.id,
+                      vaultPath: tabRef.vaultPath ?? "(scratch)",
+                    },
+                  );
+                } else {
+                  deferredTabCount += 1;
+                  const end = perfStart("workbench.mountDeferredTabShell", {
+                    paneId: pane.id,
+                    vaultPath: tabRef.vaultPath ?? "(scratch)",
+                  });
+                  mountDeferredTabShell(tabRef, pane.id);
+                  end();
+                }
               } catch (e) {
                 console.error("Failed to restore tab", tabRef, e);
+                perfLog("workbench.restoreTab failed", {
+                  error: e instanceof Error ? e.message : String(e),
+                });
               }
             }
             const paneTabs = useEditorStore.getState().tabs.filter((t) => t.paneId === pane.id);
@@ -340,6 +391,8 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
               activeMap[pane.id] = paneTabs[idx]!.id;
             }
           }
+
+          perfLog("workbench.restoreSession.tabs", { activeTabCount, deferredTabCount });
 
           useEditorStore.setState({
             activeTabIdByPane: activeMap,
@@ -355,46 +408,69 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
             await clearLegacyScratchSession();
           }
           restoreSucceeded = true;
+          captureAllOpenTabViewStates();
+          seedPersistedSessionSnapshot(this.buildSession());
           eventBus.emit({ type: "workbench:session-restored" });
           return true;
         } catch (e) {
           console.error("restoreSession failed", e);
+          perfLog("workbench.restoreSession.error", {
+            error: e instanceof Error ? e.message : String(e),
+          });
           useEditorStore.setState({ sessionRestored: true });
           return false;
         } finally {
           sessionPersistSuspended = false;
-          const tabCount = useEditorStore.getState().tabs.length;
-          if (restoreSucceeded && tabCount > 0) {
-            await this.persistSession();
-          } else if (!restoreSucceeded && tabCount === 0) {
+          if (!useEditorStore.getState().sessionRestored) {
+            useEditorStore.setState({ sessionRestored: true });
+          }
+          if (!restoreSucceeded && useEditorStore.getState().tabs.length === 0) {
             console.warn("Session restore failed with no tabs — keeping saved session intact");
           }
         }
-      })();
+      });
 
       return restoreInflight;
     },
 
-    async persistSession() {
-      if (sessionPersistSuspended) return;
-      if (!useEditorStore.getState().sessionRestored) return;
+    async persistSession(reason: SessionPersistReason = "immediate") {
+      return perfAsync(
+        "workbench.persistSession",
+        async () => {
+          if (sessionPersistSuspended) return;
+          if (!useEditorStore.getState().sessionRestored) return;
 
-      captureAllOpenTabViewStates();
-      const session = this.buildSession();
-      const editor = useEditorStore.getState();
+          captureAllOpenTabViewStates();
+          const session = this.buildSession();
+          const editor = useEditorStore.getState();
 
-      if (!session) {
-        if (editor.tabs.length === 0) {
-          await saveWorkspaceSession(null);
-        }
-        return;
-      }
+          if (!session) {
+            if (editor.tabs.length === 0) {
+              if (lastPersistedSessionFingerprint !== null) {
+                await saveWorkspaceSession(null);
+                lastPersistedSessionFingerprint = null;
+              } else {
+                perfLog("workbench.persistSession skipped (unchanged)", { reason });
+              }
+            }
+            return;
+          }
 
-      await saveWorkspaceSession(session);
-      lastPersistedVault = {
-        id: session.vaultId,
-        rootPath: normalizeVaultPath(session.vaultRootPath),
-      };
+          const fingerprint = sessionFingerprint(session);
+          if (fingerprint === lastPersistedSessionFingerprint) {
+            perfLog("workbench.persistSession skipped (unchanged)", { reason });
+            return;
+          }
+
+          await saveWorkspaceSession(session);
+          lastPersistedSessionFingerprint = fingerprint;
+          lastPersistedVault = {
+            id: session.vaultId,
+            rootPath: normalizeVaultPath(session.vaultRootPath),
+          };
+        },
+        { tabCount: useEditorStore.getState().tabs.length, reason },
+      );
     },
 
     async persistSessionNow() {
@@ -402,16 +478,26 @@ export function createWorkbenchService(deps: WorkbenchServiceDeps): WorkbenchSer
         clearTimeout(persistTimer);
         persistTimer = null;
       }
-      await this.persistSession();
+      scheduledPersistReason = "layout";
+      await this.persistSession("immediate");
     },
 
-    schedulePersist() {
+    schedulePersist(reason: SessionPersistReason = "layout") {
       if (sessionPersistSuspended) return;
+      scheduledPersistReason = reason === "content" ? "content" : "layout";
+
+      const delay =
+        scheduledPersistReason === "content"
+          ? SESSION_PERSIST_CONTENT_DEBOUNCE_MS
+          : SESSION_PERSIST_LAYOUT_DEBOUNCE_MS;
+
       if (persistTimer) clearTimeout(persistTimer);
       persistTimer = setTimeout(() => {
+        const logReason = scheduledPersistReason;
+        scheduledPersistReason = "layout";
         persistTimer = null;
-        void this.persistSession();
-      }, 800);
+        void this.persistSession(logReason);
+      }, delay);
     },
   };
 }
@@ -423,7 +509,11 @@ async function restoreTabRef(
 ): Promise<void> {
   if (tabRef.vaultPath) {
     const mode = tabRef.viewState?.mode;
-    const doc = await document.open(tabRef.vaultPath, { paneId, initialMode: mode });
+    const doc = await document.open(tabRef.vaultPath, {
+      paneId,
+      initialMode: mode,
+      restoreSession: true,
+    });
     if (tabRef.viewState) {
       document.updateViewState(doc.id, tabRef.viewState);
     }
@@ -434,36 +524,8 @@ async function restoreTabRef(
 
   const scratchKey = tabRef.scratchId;
   if (scratchKey || tabRef.ephemeral) {
-    let title = tabRef.ephemeral?.title ?? "Untitled";
-    let content = tabRef.ephemeral?.content ?? "";
-    let language = tabRef.ephemeral?.language ?? "markdown";
-    const viewState =
-      tabRef.viewState ??
-      tabRef.ephemeral?.viewState ?? {
-        mode: DEFAULT_PREFERENCES.editor.defaultSurfaceMode,
-      };
-
-    if (scratchKey) {
-      try {
-        const buf = await scratch.loadBuffer(scratchKey);
-        if (buf) {
-          title = buf.displayName;
-          content = buf.content;
-          language = buf.language;
-        }
-      } catch {
-        /* use ephemeral fallback below */
-      }
-    }
-
-    const doc = document.createEphemeral({
-      ...(scratchKey ? { id: scratchKey } : {}),
-      paneId,
-      title,
-      content,
-      initialMode: viewState.mode,
-    });
-    document.updateViewState(doc.id, viewState);
+    const scratchData = await loadScratchRestoreData(tabRef);
+    const doc = createEphemeralFromScratchRestore(document, paneId, scratchData);
     ensureDocumentTabInPane(document.get(doc.id)!, paneId);
   }
 }

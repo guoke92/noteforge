@@ -7,6 +7,7 @@ import {
   resolveThemeEffective,
   writeThemeCache,
 } from "@/lib/theme-cache";
+import { perfAsync, perfLog } from "@/lib/startup-perf";
 
 interface ThemeState {
   mode: ThemeMode;
@@ -23,16 +24,18 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
   async init() {
     try {
-      const { theme } = await system.getTheme();
+      const { theme } = await perfAsync("theme.ipc.getTheme", () => system.getTheme());
       const effective = resolveThemeEffective(theme);
       applyThemeClass(effective);
       writeThemeCache(theme);
       set({ mode: theme, effective });
+      perfLog("theme.applied", { mode: theme, effective });
     } catch {
       const effective = resolveThemeEffective("system");
       applyThemeClass(effective);
       writeThemeCache("system");
       set({ mode: "system", effective });
+      perfLog("theme.applied-fallback", { mode: "system", effective });
     }
 
     if (typeof window !== "undefined") {

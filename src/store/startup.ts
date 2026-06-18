@@ -13,10 +13,18 @@ export const STARTUP_STEP_LABELS: Record<StartupStep, string> = {
 interface StartupState {
   stepsDone: Record<StartupStep, boolean>;
   activeStep: StartupStep;
+  /** Bootstrap finished — mount main shell behind splash. */
+  bootstrapComplete: boolean;
+  /** Main shell mounted and painted at least once. */
+  mainShellReady: boolean;
+  /** Main workbench visible to the user (after splash). */
+  mainShellRevealed: boolean;
   splashVisible: boolean;
   fading: boolean;
   setActiveStep: (step: StartupStep) => void;
   completeStep: (step: StartupStep) => void;
+  markBootstrapComplete: () => void;
+  finishStartup: () => void;
   beginFadeOut: () => void;
   hideSplash: () => void;
 }
@@ -24,6 +32,9 @@ interface StartupState {
 export const useStartupStore = create<StartupState>((set, get) => ({
   stepsDone: { theme: false, session: false, workspace: false },
   activeStep: "theme",
+  bootstrapComplete: false,
+  mainShellReady: false,
+  mainShellRevealed: false,
   splashVisible: true,
   fading: false,
 
@@ -38,6 +49,14 @@ export const useStartupStore = create<StartupState>((set, get) => ({
       stepsDone,
       activeStep: next ?? step,
     });
+  },
+
+  markBootstrapComplete() {
+    set({ bootstrapComplete: true });
+  },
+
+  finishStartup() {
+    set({ splashVisible: false, mainShellRevealed: true, fading: false });
   },
 
   beginFadeOut() {

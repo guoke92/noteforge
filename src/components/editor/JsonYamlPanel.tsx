@@ -1,10 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import type { EditorTab } from "@/store/editor";
 import { useEditorStore } from "@/store/editor";
+import { useDocumentRecord } from "@/hooks/useDocumentContent";
 import { MonacoEditor, type MonacoEditorBinding } from "./MonacoEditor";
 import { TreeView } from "@/features/json-yaml/TreeView";
 import { findJsonPathAtLine, findLineForJsonPath, type JsonPath } from "@/lib/json-location";
 import { findYamlPathAtLine, findLineForYamlPath } from "@/lib/yaml-location";
+
+import { applyContentToDocument } from "@/core/bridge/editor-sync";
 
 interface Props {
   tab: EditorTab;
@@ -13,23 +16,25 @@ interface Props {
 export function JsonYamlPanel({ tab }: Props) {
   const [cursorLine, setCursorLine] = useState(1);
   const editorBinding = useRef<MonacoEditorBinding | null>(null);
-  const updateContent = useEditorStore((s) => s.updateContent);
   const toggleTreeSyncLinked = useEditorStore((s) => s.toggleTreeSyncLinked);
   const syncLinked = tab.treeSyncLinked !== false;
+  const doc = useDocumentRecord(tab.documentId);
+  const docContent = doc?.content ?? "";
+  const tier = doc?.tier ?? "normal";
 
   const activePath = useMemo(() => {
     if (!syncLinked) return null;
-    if (tab.language === "json") return findJsonPathAtLine(tab.content, cursorLine);
-    if (tab.language === "yaml") return findYamlPathAtLine(tab.content, cursorLine);
+    if (tab.language === "json") return findJsonPathAtLine(docContent, cursorLine);
+    if (tab.language === "yaml") return findYamlPathAtLine(docContent, cursorLine);
     return null;
-  }, [tab.content, tab.language, cursorLine, syncLinked]);
+  }, [docContent, tab.language, cursorLine, syncLinked]);
 
   const handlePathSelect = (path: JsonPath) => {
     if (!syncLinked || path.length === 0) return;
     const line =
       tab.language === "json"
-        ? findLineForJsonPath(tab.content, path)
-        : findLineForYamlPath(tab.content, path);
+        ? findLineForJsonPath(docContent, path)
+        : findLineForYamlPath(docContent, path);
     if (line) editorBinding.current?.revealLine(line);
   };
 
@@ -46,13 +51,15 @@ export function JsonYamlPanel({ tab }: Props) {
       </div>
       <div className="min-h-0 overflow-hidden">
         <TreeView
-          content={tab.content}
+          documentId={tab.documentId}
+          tier={tier}
+          content={docContent}
           language={tab.language as "json" | "yaml"}
           activePath={activePath}
           syncLinked={syncLinked}
           onToggleSync={() => toggleTreeSyncLinked(tab.id)}
           onPathSelect={handlePathSelect}
-          onFormat={(s) => updateContent(tab.id, s)}
+          onFormat={(formatted) => applyContentToDocument(tab.documentId, formatted)}
         />
       </div>
     </div>

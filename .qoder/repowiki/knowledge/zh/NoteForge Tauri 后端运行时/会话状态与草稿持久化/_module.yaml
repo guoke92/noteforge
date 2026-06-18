@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: backend_tauri/session_draft_vault
+title: 会话状态与草稿持久化
+scope:
+    - src-tauri/src/workbench_session.rs
+    - src-tauri/src/workspace_draft.rs
+    - src-tauri/src/commands/workbench_session.rs
+    - src-tauri/src/commands/workspace_draft.rs
+    - src-tauri/src/commands/vault_watch.rs
+    - src-tauri/src/models/workspace_draft.rs
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/core_infrastructure/workbench
+    - path: frontend_app/core_infrastructure/vault_service
+    - path: backend_tauri/config_encryption_core
+    - path: backend_tauri/workspace_editor
+    - path: frontend_app/core_infrastructure/document_management
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: frontend_app/navigation_and_panels
+    - path: backend_tauri/search_memory_scratch
+    - path: frontend_app/core_infrastructure/editor_host

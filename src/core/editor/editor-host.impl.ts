@@ -16,16 +16,27 @@ export function createEditorHostService(deps: {
 }): EditorHostService {
   const { document } = deps;
   const handles = new Map<string, LiveSurfaceHandle>();
+  const handleDocumentIds = new Map<string, DocumentId>();
+
+  function findTabById(tabId: string) {
+    return getEditorStoreHost().tabs.find((t) => t.id === tabId);
+  }
+
+  function tabsForDocument(documentId: DocumentId) {
+    return getEditorStoreHost().tabs.filter((t) => t.documentId === documentId);
+  }
 
   function getActiveMode(documentId: DocumentId): EditorSurfaceMode {
-    const tab = getEditorStoreHost().tabs.find((t) => t.id === documentId);
+    const tab = tabsForDocument(documentId)[0];
     if (!tab) return "write";
     return resolveSurfaceMode(tab);
   }
 
-  function flushSurface(documentId: DocumentId, mode: EditorSurfaceMode): void {
-    const handle = handles.get(surfaceRegistrationKey(documentId, mode));
-    if (!handle) return;
+  function flushSurface(tabId: string, mode: EditorSurfaceMode): void {
+    const key = surfaceRegistrationKey(tabId, mode);
+    const handle = handles.get(key);
+    const documentId = handleDocumentIds.get(key);
+    if (!handle || !documentId) return;
 
     const patch = handle.flush();
     if (patch) {
@@ -38,27 +49,35 @@ export function createEditorHostService(deps: {
     }
   }
 
-  async function setMode(documentId: DocumentId, mode: EditorSurfaceMode): Promise<void> {
+  function flushAllSurfacesForDocument(documentId: DocumentId): void {
+    for (const tab of tabsForDocument(documentId)) {
+      flushSurface(tab.id, resolveSurfaceMode(tab));
+    }
+  }
+
+  async function setMode(tabId: string, mode: EditorSurfaceMode): Promise<void> {
     const normalized = normalizeSurfaceMode(mode);
-    const tab = getEditorStoreHost().tabs.find((t) => t.id === documentId);
+    const tab = findTabById(tabId);
     if (!tab) return;
 
     const current = resolveSurfaceMode(tab);
     if (current === normalized) return;
 
-    flushSurface(documentId, current);
-    getEditorStoreHost().applySurfaceMode(documentId, normalized);
-    syncSurfaceModeToDocument(documentId, normalized);
-    document.updateViewState(documentId, { mode: normalized });
+    flushSurface(tabId, current);
+    getEditorStoreHost().applySurfaceMode(tabId, normalized);
+    syncSurfaceModeToDocument(tabId, normalized);
+    document.updateViewState(tab.documentId, { mode: normalized });
   }
 
   function registerSurface(
+    tabId: string,
     documentId: DocumentId,
     mode: EditorSurfaceMode,
     handle: LiveSurfaceHandle,
   ): () => void {
-    const key = surfaceRegistrationKey(documentId, mode);
+    const key = surfaceRegistrationKey(tabId, mode);
     handles.set(key, handle);
+    handleDocumentIds.set(key, documentId);
 
     const doc = document.get(documentId);
     if (doc?.viewState) {
@@ -69,20 +88,41 @@ export function createEditorHostService(deps: {
     }
 
     return () => {
-      if (handles.get(key) === handle) handles.delete(key);
+      if (handles.get(key) === handle) {
+        const patch = handle.flush();
+        if (patch) {
+          document.applyPatch(documentId, patch);
+        }
+        const captured = handle.captureViewState();
+        if (captured.cursor || captured.scroll) {
+          document.updateViewState(documentId, captured);
+        }
+        handles.delete(key);
+        handleDocumentIds.delete(key);
+      }
     };
   }
 
   function revealLine(documentId: DocumentId, line: number): boolean {
-    const mode = getActiveMode(documentId);
-    const handle = handles.get(surfaceRegistrationKey(documentId, mode));
+    const activePaneId = getEditorStoreHost().activePaneId;
+    const activeTabId = getEditorStoreHost().activeTabIdByPane[activePaneId];
+    const tab =
+      (activeTabId
+        ? tabsForDocument(documentId).find((t) => t.id === activeTabId)
+        : undefined) ?? tabsForDocument(documentId)[0];
+    if (!tab) return false;
+
+    const mode = resolveSurfaceMode(tab);
+    const handle = handles.get(surfaceRegistrationKey(tab.id, mode));
     return handle?.revealLine(line) ?? false;
   }
 
   function applyExternalContent(documentId: DocumentId, content: string): void {
-    const mode = getActiveMode(documentId);
-    const handle = handles.get(surfaceRegistrationKey(documentId, mode));
-    handle?.applyExternalContent(content);
+    for (const [key, handle] of handles) {
+      if (handleDocumentIds.get(key) === documentId) {
+        handle.applyExternalContent(content);
+      }
+    }
   }
 
   return {
@@ -95,16 +135,19 @@ export function createEditorHostService(deps: {
     revealLine,
     applyExternalContent,
     flushSurface,
+    flushAllSurfacesForDocument,
   };
 }
 
 export type EditorHostServiceImpl = ReturnType<typeof createEditorHostService> & {
   registerSurface: (
+    tabId: string,
     documentId: DocumentId,
     mode: EditorSurfaceMode,
     handle: LiveSurfaceHandle,
   ) => () => void;
   revealLine: (documentId: DocumentId, line: number) => boolean;
   applyExternalContent: (documentId: DocumentId, content: string) => void;
-  flushSurface: (documentId: DocumentId, mode: EditorSurfaceMode) => void;
+  flushSurface: (tabId: string, mode: EditorSurfaceMode) => void;
+  flushAllSurfacesForDocument: (documentId: DocumentId) => void;
 };

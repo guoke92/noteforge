@@ -10,7 +10,7 @@ export type CommandCategory =
   | "ai";
 
 export interface CommandContext {
-  activeDocumentId: string | null;
+  activeTabId: string | null;
   activePaneId: string;
   isEditorFocused: boolean;
   isInputContext: boolean;

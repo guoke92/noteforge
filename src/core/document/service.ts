@@ -29,9 +29,16 @@ export interface DocumentService {
 
   applyPatch(documentId: DocumentId, patch: ContentPatch): void;
 
+  /** Load full disk content for huge lazy-open documents before edit/save. */
+  ensureContentLoaded(documentId: DocumentId): Promise<DocumentRecord | null>;
+
   updateViewState(documentId: DocumentId, patch: Partial<ViewState>): void;
 
   save(documentId: DocumentId, target?: SaveTarget): Promise<VaultPath>;
+
+  /** Post-save binding for SaveAs flows where file was already written.
+   *  Updates vaultPath, savedRevision, baseline without conflict detection. */
+  saveAs(documentId: DocumentId, vaultPath: VaultPath): Promise<void>;
 
   revert(documentId: DocumentId): Promise<void>;
 

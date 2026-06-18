@@ -132,6 +132,8 @@ fn test_note_repo_crud() {
             Some("Readme"),
             Some("Hello"),
             Some("markdown"),
+            0,
+            0,
         )
         .unwrap();
 

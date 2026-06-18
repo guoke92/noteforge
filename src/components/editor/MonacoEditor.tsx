@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as monacoNs from "monaco-editor";
-import "@/lib/monaco-setup";
 import { useThemeStore } from "@/store/theme";
 import { useEditorStore } from "@/store/editor";
 import type { EditorTab } from "@/store/editor";
@@ -10,9 +9,41 @@ import { useAIStore } from "@/store/ai";
 import { tabDisplayLanguage } from "@/lib/editor-doc";
 import { collectMarkdownNotes, searchWikiTitles } from "@/lib/wiki-resolve";
 import { getCore } from "@/core/runtime";
+import { resolveSurfaceMode } from "@/lib/surface-mode";
 import type { EditorSurfaceMode } from "@/core/document/types";
 import type { LiveSurfaceHandle } from "@/core/editor/surface-handle";
+import { getTierConfig } from "@/core/document/file-tier";
+import type { DocumentRecord } from "@/core/document/types";
+import { createContentDebouncer } from "@/core/editor/content-debouncer";
+import { monacoLanguageId } from "@/lib/language-registry";
+import { perfLog, perfStart } from "@/lib/startup-perf";
 import { AIFloatingToolbar } from "./AIFloatingToolbar";
+import { useDocumentRecord } from "@/hooks/useDocumentContent";
+import { useLargeFileOverrides } from "@/store/large-file-overrides";
+import {
+  acquireMonacoSlot,
+  isHeavyFileTier,
+  largeMonacoSlotLimit,
+  releaseMonacoSlot,
+} from "@/core/editor/monaco-slot";
+
+function applyDocMonacoOptions(
+  editor: monacoNs.editor.IStandaloneCodeEditor,
+  doc: DocumentRecord,
+  advancedMonaco: boolean,
+) {
+  const useAdvanced = doc.tier === "normal" || advancedMonaco;
+  const tierCfg = getTierConfig(useAdvanced ? "normal" : doc.tier);
+  editor.updateOptions({
+    minimap: { enabled: tierCfg.monaco.minimap },
+    folding: tierCfg.monaco.folding,
+    bracketPairColorization: { enabled: tierCfg.monaco.bracketPairColorization },
+    wordBasedSuggestions: tierCfg.monaco.wordBasedSuggestions,
+    formatOnPaste: tierCfg.monaco.formatOnPaste,
+    quickSuggestions: tierCfg.monaco.quickSuggestions,
+    readOnly: doc.tier === "huge" && doc.contentLoaded ? false : tierCfg.readOnly,
+  });
+}
 
 export type MarkdownEditorVariant = "default" | "source";
 
@@ -33,7 +64,7 @@ export interface MonacoEditorBinding {
 
 export function MonacoEditor({
   tab,
-  markdownVariant = "default",
+  markdownVariant: _markdownVariant = "default",
   hostSurfaceMode,
   onCursorLineChange,
   bindEditor,
@@ -45,12 +76,63 @@ export function MonacoEditor({
   cursorLineCbRef.current = onCursorLineChange;
   const bindEditorRef = useRef(bindEditor);
   bindEditorRef.current = bindEditor;
+  const tabIdRef = useRef(tab.id);
+  const documentIdRef = useRef(tab.documentId);
+  tabIdRef.current = tab.id;
+  documentIdRef.current = tab.documentId;
+
+  const contentDebouncerRef = useRef(
+    createContentDebouncer({
+      shouldEmit(content) {
+        const doc = getCore().document.get(documentIdRef.current);
+        return !!doc && content !== doc.content;
+      },
+      onEmit(content) {
+        useEditorStore.getState().updateContent(tabIdRef.current, content);
+      },
+    }),
+  );
+
+  const doc = useDocumentRecord(tab.documentId);
+  const advancedMonaco = useLargeFileOverrides((s) =>
+    doc ? s.isEnabled(tab.documentId, doc.tier, "advancedMonaco") : false,
+  );
+  const needsHeavySlot = doc != null && isHeavyFileTier(doc.tier);
+  const [slotGranted, setSlotGranted] = useState(() => !needsHeavySlot);
 
   useEffect(() => {
-    return () => bindEditorRef.current?.(null);
-  }, [tab.id]);
+    if (!needsHeavySlot) {
+      setSlotGranted(true);
+      return;
+    }
+    const granted = acquireMonacoSlot(tab.id);
+    setSlotGranted(granted);
+    return () => {
+      releaseMonacoSlot(tab.id);
+    };
+  }, [tab.id, needsHeavySlot]);
+
+  const debouncedUpdateContent = useCallback((value: string) => {
+    contentDebouncerRef.current.schedule(value);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      bindEditorRef.current?.(null);
+      contentDebouncerRef.current.cancel();
+      const ed = editorRef.current;
+      if (ed) {
+        const model = ed.getModel();
+        ed.dispose();
+        if (model && !model.isDisposed()) {
+          model.dispose();
+        }
+        editorRef.current = null;
+      }
+      hostHandleRef.current = null;
+    };
+  }, [tab.id, tab.documentId]);
   const [editor, setEditor] = useState<monacoNs.editor.IStandaloneCodeEditor | null>(null);
-  const updateContent = useEditorStore((s) => s.updateContent);
   // const setLanguage = useEditorStore((s) => s.setLanguage);
   const themeMode = useThemeStore((s) => s.effective);
   const refine = useAIStore((s) => s.refineSelection);
@@ -63,6 +145,11 @@ export function MonacoEditor({
   }, [tab.id]);
 
   const onMount: OnMount = (editor, monaco) => {
+    const endMount = perfStart("editor.monaco.onMount", {
+      tabId: tab.id,
+      documentId: tab.documentId,
+      language: tab.language,
+    });
     editorRef.current = editor;
     setEditor(editor);
 
@@ -211,102 +298,130 @@ export function MonacoEditor({
     };
     bindEditorRef.current?.(binding);
 
-    if (hostSurfaceMode) {
-      hostHandleRef.current = {
-        mode: hostSurfaceMode,
-        flush() {
-          const model = editor.getModel();
-          if (!model) return null;
-          const content = model.getValue();
-          const doc = getCore().document.get(tab.id);
-          if (!doc || content === doc.content) return null;
-          return { kind: "replace-all", content };
-        },
-        revealLine(line: number) {
-          binding.revealLine(line);
-          return true;
-        },
-        applyExternalContent(content: string) {
-          const model = editor.getModel();
-          if (!model || model.getValue() === content) return;
-          const position = editor.getPosition();
-          const scrollTop = editor.getScrollTop();
-          model.setValue(content);
-          if (position) editor.setPosition(position);
-          editor.setScrollTop(scrollTop);
-        },
-        focus() {
-          editor.focus();
-        },
-        captureViewState() {
-          const pos = editor.getPosition();
-          return {
-            cursor: pos
-              ? { line: pos.lineNumber, column: pos.column }
-              : undefined,
-            scroll: { scrollTop: editor.getScrollTop() },
-          };
-        },
-        restoreViewState(state) {
-          if (state.cursor) {
-            editor.setPosition({
-              lineNumber: state.cursor.line,
-              column: state.cursor.column,
-            });
-          }
-          if (state.scroll) {
-            editor.setScrollTop(state.scroll.scrollTop);
-          }
-        },
-      };
+    // Set initial content from DocumentService (non-controlled)
+    const doc = getCore().document.get(tab.documentId);
+    if (doc) {
+      editor.getModel()?.setValue(doc.content);
     }
+
+    // Restore view state AFTER content is set (setValue resets cursor/scroll)
+    if (doc?.viewState) {
+      const { cursor, scroll } = doc.viewState;
+      if (cursor) {
+        editor.setPosition({ lineNumber: cursor.line, column: cursor.column });
+      }
+      if (scroll) {
+        editor.setScrollTop(scroll.scrollTop);
+      }
+    }
+
+    // Apply tier-based Monaco options for large files
+    if (doc) {
+      applyDocMonacoOptions(editor, doc, advancedMonaco);
+    }
+
+    // Register surface handle for flush/external-content (all tabs)
+    const surfaceMode = hostSurfaceMode ?? resolveSurfaceMode(tab);
+    const handle: LiveSurfaceHandle = {
+      mode: surfaceMode,
+      flush() {
+        const m = editor.getModel();
+        if (!m) return null;
+        contentDebouncerRef.current.flushPending();
+        const content = m.getValue();
+        const currentDoc = getCore().document.get(tab.documentId);
+        if (!currentDoc || content === currentDoc.content) return null;
+        return { kind: "replace-all" as const, content };
+      },
+      revealLine(line: number) {
+        binding.revealLine(line);
+        return true;
+      },
+      applyExternalContent(content: string) {
+        const m = editor.getModel();
+        if (!m || m.getValue() === content) return;
+        const position = editor.getPosition();
+        const scrollTop = editor.getScrollTop();
+        m.setValue(content);
+        if (position) editor.setPosition(position);
+        editor.setScrollTop(scrollTop);
+      },
+      focus() {
+        editor.focus();
+      },
+      captureViewState() {
+        const pos = editor.getPosition();
+        return {
+          cursor: pos ? { line: pos.lineNumber, column: pos.column } : undefined,
+          scroll: { scrollTop: editor.getScrollTop() },
+        };
+      },
+      restoreViewState(state) {
+        if (state.cursor) {
+          editor.setPosition({ lineNumber: state.cursor.line, column: state.cursor.column });
+        }
+        if (state.scroll) {
+          editor.setScrollTop(state.scroll.scrollTop);
+        }
+      },
+    };
+    hostHandleRef.current = handle;
+    endMount();
   };
 
   useEffect(() => {
-    if (!hostSurfaceMode) return;
     const handle = hostHandleRef.current;
-    if (!handle) return;
-    return getCore().editorHost.registerSurface(tab.id, hostSurfaceMode, handle);
-  }, [tab.id, hostSurfaceMode, editor]);
+    if (!editor || !handle) return;
+    const surfaceMode = hostSurfaceMode ?? resolveSurfaceMode(tab);
+    return getCore().editorHost.registerSurface(
+      tab.id,
+      tab.documentId,
+      surfaceMode,
+      handle,
+    );
+  }, [editor, tab.id, tab.documentId, hostSurfaceMode, tab.surfaceMode]);
 
   useEffect(() => {
-    if (hostSurfaceMode) {
-      getCore().editorHost.applyExternalContent(tab.id, tab.content);
-      return;
-    }
-    const editor = editorRef.current;
-    if (!editor) return;
-    if (editor.hasTextFocus()) return;
-    const model = editor.getModel();
-    if (!model || model.getValue() === tab.content) return;
-    const position = editor.getPosition();
-    const scrollTop = editor.getScrollTop();
-    model.setValue(tab.content);
-    if (position) editor.setPosition(position);
-    editor.setScrollTop(scrollTop);
-  }, [tab.content, hostSurfaceMode, tab.id]);
+    const ed = editorRef.current;
+    if (!ed || !doc) return;
+    applyDocMonacoOptions(ed, doc, advancedMonaco);
+  }, [doc, advancedMonaco, editor]);
 
-  // Sync language to monaco model when tab.language changes
   useEffect(() => {
-    if (!editorRef.current) return;
-    const model = editorRef.current.getModel();
-    if (model) {
-      // language is updated through the Editor `language` prop on next render
-    }
-  }, [tab.language]);
+    const eventBus = getCore().eventBus;
+    return eventBus.subscribe("document:changed", (event) => {
+      if (event.documentId !== tab.documentId) return;
+      const next = getCore().document.get(tab.documentId);
+      if (!next?.contentLoaded) return;
+      hostHandleRef.current?.applyExternalContent(next.content);
+    });
+  }, [tab.documentId]);
 
   const displayLang = tabDisplayLanguage(tab);
   const isMarkdown = displayLang === "markdown";
+
+  if (needsHeavySlot && !slotGranted) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-text-secondary">
+        <div>
+          <p className="mb-2 text-base text-text-primary">大文件编辑器已达同时打开上限</p>
+          <p className="text-sm opacity-80">
+            当前最多同时加载 {largeMonacoSlotLimit()} 个大文件编辑器。请关闭或切换其他大文件标签后再试。
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden">
       <Editor
         key={tab.id}
         height="100%"
-        language={mapLanguage(displayLang)}
+        language={monacoLanguageId(displayLang)}
         theme={themeMode === "dark" ? "vs-dark" : "light"}
-        value={tab.content}
-        onChange={(v) => updateContent(tab.id, v || "")}
+        value={undefined}
+        onChange={(v) => debouncedUpdateContent(v || "")}
         onMount={onMount}
         beforeMount={(monaco) => {
           // Cap Markdown / YAML diagnostics noise
@@ -352,30 +467,5 @@ export function MonacoEditor({
       />
       <AIFloatingToolbar editor={editor} />
     </div>
-  );
-}
-
-function mapLanguage(language: string): string {
-  // Map our internal language names to Monaco IDs
-  return (
-    {
-      markdown: "markdown",
-      json: "json",
-      yaml: "yaml",
-      typescript: "typescript",
-      javascript: "javascript",
-      python: "python",
-      rust: "rust",
-      go: "go",
-      java: "java",
-      cpp: "cpp",
-      html: "html",
-      css: "css",
-      shell: "shell",
-      sql: "sql",
-      xml: "xml",
-      toml: "ini",
-      plaintext: "plaintext",
-    }[language] || "plaintext"
   );
 }

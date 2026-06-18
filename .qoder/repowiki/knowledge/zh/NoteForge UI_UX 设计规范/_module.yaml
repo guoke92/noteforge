@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: docs_design
+title: NoteForge UI/UX 设计规范
+scope:
+    - docs/design/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/shared_ui_and_utils
+    - path: frontend_app/navigation_and_panels
+    - path: frontend_app/editor_feature
+    - path: frontend_app/shell_and_dialogs
+    - path: frontend_app/core_infrastructure/workbench
+    - path: frontend_app/core_infrastructure/dialog_system
+    - path: frontend_app/core_infrastructure/command_system

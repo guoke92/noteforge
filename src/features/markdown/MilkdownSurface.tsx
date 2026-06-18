@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { Milkdown, MilkdownProvider, useEditor } from "@milkdown/react";
 import { EditorStatus, editorViewCtx } from "@milkdown/kit/core";
@@ -12,7 +12,9 @@ import type { LiveSurfaceHandle } from "@/core/editor/surface-handle";
 import { revealHeadingInCrepe } from "./heading-nav";
 import { wikiLinkPlugins } from "./wikilink-plugin";
 import { createCaretStatusPlugin } from "./caret-status-plugin";
-import "./milkdown-surface.css";
+import { createContentDebouncer } from "@/core/editor/content-debouncer";
+import { MILKDOWN_READONLY_POLL_MS } from "@/core/platform/timing";
+import { perfLog } from "@/lib/startup-perf";
 
 interface Props {
   tab: EditorTab;
@@ -23,15 +25,42 @@ interface Props {
 function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
   const updateContent = useEditorStore((s) => s.updateContent);
   const crepeRef = useRef<Crepe | null>(null);
-  const lastEmittedRef = useRef(tab.content);
+  const initialContent = getCore().document.get(tab.documentId)?.content ?? "";
+  const lastEmittedRef = useRef(initialContent);
   const suppressEmitRef = useRef(false);
   const handleRef = useRef<LiveSurfaceHandle | null>(null);
+  const tabIdRef = useRef(tab.id);
+  const documentIdRef = useRef(tab.documentId);
+  tabIdRef.current = tab.id;
+  documentIdRef.current = tab.documentId;
+
+  const contentDebouncerRef = useRef(
+    createContentDebouncer({
+      shouldEmit(markdown) {
+        if (markdown === lastEmittedRef.current) return false;
+        const doc = getCore().document.get(documentIdRef.current);
+        return !!doc && markdown !== doc.content;
+      },
+      onEmit(markdown) {
+        lastEmittedRef.current = markdown;
+        updateContent(tabIdRef.current, markdown);
+      },
+    }),
+  );
+
+  const flushPendingMarkdown = () => {
+    contentDebouncerRef.current.flushPending();
+  };
+
+  const scheduleMarkdownUpdate = (markdown: string) => {
+    contentDebouncerRef.current.schedule(markdown);
+  };
 
   const { loading } = useEditor(
     (root) => {
       const crepe = new Crepe({
         root,
-        defaultValue: tab.content,
+        defaultValue: initialContent,
         featureConfigs: {
           [CrepeFeature.Placeholder]: {
             text: readOnly ? "" : "开始写作，输入 / 唤起命令…",
@@ -49,8 +78,7 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
         listener.markdownUpdated((_ctx, markdown) => {
           if (suppressEmitRef.current || readOnly) return;
           if (markdown === lastEmittedRef.current) return;
-          lastEmittedRef.current = markdown;
-          updateContent(tab.id, markdown);
+          scheduleMarkdownUpdate(markdown);
         });
       });
 
@@ -65,8 +93,11 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
     flush() {
       const crepe = crepeRef.current;
       if (!crepe || readOnly) return null;
+
+      contentDebouncerRef.current.flushPending();
+
       const markdown = crepe.getMarkdown();
-      const doc = getCore().document.get(tab.id);
+      const doc = getCore().document.get(tab.documentId);
       if (!doc || markdown === doc.content) return null;
       lastEmittedRef.current = markdown;
       return { kind: "replace-all", content: markdown };
@@ -74,8 +105,8 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
     revealLine(line: number) {
       const crepe = crepeRef.current;
       if (!crepe) return false;
-      const doc = getCore().document.get(tab.id);
-      return revealHeadingInCrepe(crepe, doc?.content ?? tab.content, line);
+      const doc = getCore().document.get(tab.documentId);
+      return revealHeadingInCrepe(crepe, doc?.content ?? "", line);
     },
     applyExternalContent(content: string) {
       const crepe = crepeRef.current;
@@ -84,6 +115,7 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
         lastEmittedRef.current = content;
         return;
       }
+      contentDebouncerRef.current.cancel();
       suppressEmitRef.current = true;
       lastEmittedRef.current = content;
       crepe.editor.action(replaceAll(content, false));
@@ -120,18 +152,32 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
   useEffect(() => {
     const handle = handleRef.current;
     if (!handle) return;
-    return getCore().editorHost.registerSurface(tab.id, mode, handle);
-  }, [tab.id, mode, loading]);
+    return getCore().editorHost.registerSurface(tab.id, tab.documentId, mode, handle);
+  }, [tab.id, tab.documentId, mode, loading]);
 
   useEffect(() => {
-    lastEmittedRef.current = tab.content;
-  }, [tab.id]);
+    return () => {
+      contentDebouncerRef.current.cancel();
+      flushPendingMarkdown();
+    };
+  }, [tab.id, tab.documentId]);
 
   useEffect(() => {
     if (!loading) {
-      getCore().editorHost.applyExternalContent(tab.id, tab.content);
+      perfLog("editor.milkdown.ready", { tabId: tab.id, mode, readOnly });
     }
-  }, [tab.content, tab.id, loading]);
+  }, [loading, tab.id, mode, readOnly]);
+
+  useEffect(() => {
+    const eventBus = getCore().eventBus;
+    return eventBus.subscribe("document:changed", (event) => {
+      if (event.documentId !== tab.documentId) return;
+      const doc = getCore().document.get(tab.documentId);
+      if (!doc) return;
+      const handle = handleRef.current;
+      handle?.applyExternalContent(doc.content);
+    });
+  }, [tab.id, tab.documentId]);
 
   useEffect(() => {
     const crepe = crepeRef.current;
@@ -149,7 +195,7 @@ function MilkdownEditorInner({ tab, mode, readOnly }: Props) {
 
     const timer = window.setInterval(() => {
       if (applyReadonly()) clearInterval(timer);
-    }, 30);
+    }, MILKDOWN_READONLY_POLL_MS);
     return () => clearInterval(timer);
   }, [readOnly, loading]);
 

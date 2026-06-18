@@ -5,9 +5,9 @@ import type { CommandContext } from "./types";
 
 export function buildCommandContext(): CommandContext {
   const editor = useEditorStore.getState();
-  const activeDocumentId = editor.activeTabIdByPane[editor.activePaneId] ?? null;
-  const activeTab: EditorTab | undefined = activeDocumentId
-    ? editor.tabs.find((t) => t.id === activeDocumentId)
+  const activeTabId = editor.activeTabIdByPane[editor.activePaneId] ?? null;
+  const activeTab: EditorTab | undefined = activeTabId
+    ? editor.tabs.find((t) => t.id === activeTabId)
     : undefined;
 
   const target = (typeof document !== "undefined" ? document.activeElement : null) as
@@ -20,13 +20,13 @@ export function buildCommandContext(): CommandContext {
   const isEditorFocused = !!target?.closest(".monaco-editor") || !!target?.isContentEditable;
 
   let surfaceMode: CommandContext["surfaceMode"] = null;
-  if (activeDocumentId) {
-    const doc = getCore().document.get(activeDocumentId);
+  if (activeTab) {
+    const doc = getCore().document.get(activeTab.documentId);
     if (doc) surfaceMode = doc.viewState.mode;
   }
 
   return {
-    activeDocumentId,
+    activeTabId,
     activePaneId: editor.activePaneId,
     activeTab,
     isEditorFocused,

@@ -46,6 +46,7 @@ import type {
   ScratchRestoreResponse,
   WorkspaceDraftPayload,
 } from "@/types";
+import type { SnapshotMeta } from "@/core/local-history/types";
 import { IpcError } from "@/types";
 import * as stub from "./stub";
 
@@ -235,6 +236,18 @@ export const fs = {
   move: (source: string, destination: string) =>
     call<void>("move_file", { source, destination }, () => stub.moveFile(source, destination)),
   info: (path: string) => call<FileInfo>("get_file_info", { path }, () => stub.getFileInfo(path)),
+  stat: (path: string) =>
+    call<{ size: number; mtime: string; lineCountEstimate: number }>(
+      "file_stat",
+      { path },
+      () => stub.fileStat(path),
+    ),
+  readRange: (path: string, offset: number, length: number) =>
+    call<{ content: string; totalSize: number; truncated: boolean }>(
+      "read_file_range",
+      { path, offset, length },
+      () => stub.readFileRange(path, offset, length),
+    ),
 };
 
 /* ============================================================
@@ -454,6 +467,42 @@ export const vaultWatch = {
   start: (rootPath: string) =>
     call<string>("vault_start_watch", { rootPath }, () => stub.vaultStartWatch(rootPath)),
   stop: () => call<void>("vault_stop_watch", {}, () => stub.vaultStopWatch()),
+};
+
+/* ============================================================
+ *  Local History (cross-restart version snapshots)
+ * ============================================================ */
+export const history = {
+  saveSnapshot: (vaultPath: string, content: string) =>
+    call<SnapshotMeta>(
+      "history_save_snapshot",
+      { vaultPath, content },
+      () => stub.historySaveSnapshot(vaultPath, content),
+    ),
+  listSnapshots: (vaultPath: string) =>
+    call<SnapshotMeta[]>(
+      "history_list_snapshots",
+      { vaultPath },
+      () => stub.historyListSnapshots(vaultPath),
+    ),
+  loadSnapshot: (vaultPath: string, timestamp: string) =>
+    call<string | null>(
+      "history_load_snapshot",
+      { vaultPath, timestamp },
+      () => stub.historyLoadSnapshot(vaultPath, timestamp),
+    ),
+  pruneSnapshots: (vaultPath: string) =>
+    call<void>(
+      "history_prune_snapshots",
+      { vaultPath },
+      () => stub.historyPruneSnapshots(vaultPath),
+    ),
+  deleteHistory: (vaultPath: string) =>
+    call<void>(
+      "history_delete",
+      { vaultPath },
+      () => stub.historyDelete(vaultPath),
+    ),
 };
 
 /* ============================================================

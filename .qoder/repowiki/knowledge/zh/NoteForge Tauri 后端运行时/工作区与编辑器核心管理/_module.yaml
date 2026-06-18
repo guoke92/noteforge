@@ -1,0 +1,27 @@
+schema_version: 1
+module_path: backend_tauri/workspace_editor
+title: 工作区与编辑器核心管理
+scope:
+    - src-tauri/src/commands/workspace.rs
+    - src-tauri/src/commands/editor.rs
+    - src-tauri/src/commands/file.rs
+    - src-tauri/src/models/workspace.rs
+    - src-tauri/src/models/note.rs
+    - src-tauri/src/models/file.rs
+    - src-tauri/src/models/editor.rs
+    - src-tauri/src/models/link.rs
+    - src-tauri/src/models/tag.rs
+    - src-tauri/src/models/graph.rs
+    - src-tauri/src/repositories/note_repo.rs
+    - src-tauri/src/repositories/link_repo.rs
+    - src-tauri/src/repositories/tag_repo.rs
+    - src-tauri/src/repositories/workspace_repo.rs
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/core_infrastructure/document_management
+    - path: frontend_app/core_infrastructure/vault_service
+    - path: backend_tauri/config_encryption_core
+    - path: backend_tauri/search_memory_scratch
+    - path: backend_tauri/ai_knowledge
+    - path: backend_tauri/session_draft_vault

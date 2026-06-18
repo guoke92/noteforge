@@ -7,6 +7,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(noteforge_lib::commands::vault_watch::VaultWatchState::default())
+        .manage(noteforge_lib::commands::knowledge::KnowledgeIndexState::default())
         .setup(|app| {
             let app_handle = app.handle().clone();
             noteforge_lib::db::init_database(&app_handle)?;
@@ -14,6 +15,7 @@ fn main() {
             noteforge_lib::scratch::init_scratch(&app_handle)?;
             noteforge_lib::workbench_session::init_workbench_session(&app_handle)?;
             noteforge_lib::workspace_draft::init_workspace_draft(&app_handle)?;
+            noteforge_lib::local_history::init_local_history(&app_handle)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -31,6 +33,8 @@ fn main() {
             noteforge_lib::commands::file::delete_file,
             noteforge_lib::commands::file::rename_file,
             noteforge_lib::commands::file::move_file,
+            noteforge_lib::commands::file::file_stat,
+            noteforge_lib::commands::file::read_file_range,
             // Editor
             noteforge_lib::commands::editor::detect_language,
             noteforge_lib::commands::editor::format_code,
@@ -94,6 +98,12 @@ fn main() {
             // Vault file watcher
             noteforge_lib::commands::vault_watch::vault_start_watch,
             noteforge_lib::commands::vault_watch::vault_stop_watch,
+            // Local history
+            noteforge_lib::commands::local_history::history_save_snapshot,
+            noteforge_lib::commands::local_history::history_list_snapshots,
+            noteforge_lib::commands::local_history::history_load_snapshot,
+            noteforge_lib::commands::local_history::history_prune_snapshots,
+            noteforge_lib::commands::local_history::history_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

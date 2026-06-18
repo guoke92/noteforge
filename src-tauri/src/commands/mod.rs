@@ -11,3 +11,4 @@ pub mod scratch;
 pub mod workbench_session;
 pub mod workspace_draft;
 pub mod vault_watch;
+pub mod local_history;

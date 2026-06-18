@@ -164,8 +164,16 @@ impl Database {
             );
         ")?;
         
+        let _ = migrate_notes_disk_meta(&conn);
+        
         Ok(())
     }
+}
+
+fn migrate_notes_disk_meta(conn: &Connection) -> Result<(), NoteforgeError> {
+    let _ = conn.execute("ALTER TABLE notes ADD COLUMN disk_mtime INTEGER", []);
+    let _ = conn.execute("ALTER TABLE notes ADD COLUMN disk_size INTEGER", []);
+    Ok(())
 }
 
 pub fn init_database(app: &AppHandle) -> Result<(), NoteforgeError> {

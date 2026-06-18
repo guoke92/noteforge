@@ -1,70 +1,232 @@
-use tauri::State;
+use std::collections::HashSet;
+use std::path::Path;
+use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
+
+use tauri::{AppHandle, Emitter, Manager, State};
+
 use crate::db::Database;
 use crate::error::NoteforgeError;
 use crate::knowledge::KnowledgeEngine;
-use crate::vector::VectorEngine;
 use crate::models::{
-    IndexKnowledgeBaseRequest, SearchFulltextRequest, GetKnowledgeGraphRequest,
-    ExtractLinksRequest, ExtractTagsRequest, GetBacklinksRequest, SemanticSearchRequest,
-    SearchResult, KnowledgeGraph, GraphNode, GraphEdge, Link, Backlink,
+    ExtractLinksRequest, ExtractTagsRequest, GetBacklinksRequest, GetKnowledgeGraphRequest,
+    IndexKnowledgeBaseRequest, SearchFulltextRequest, SemanticSearchRequest, Backlink,
+    GraphEdge, GraphNode, KnowledgeGraph, Link, SearchResult,
 };
 use crate::pipeline::IndexPipeline;
-use std::path::Path;
+use crate::repositories::NoteRepo;
+use crate::vector::VectorEngine;
 
+#[derive(Default)]
+pub struct KnowledgeIndexState {
+    in_flight: Mutex<HashSet<String>>,
+}
+
+impl KnowledgeIndexState {
+    fn try_start(&self, workspace_id: &str) -> bool {
+        let mut guard = match self.in_flight.lock() {
+            Ok(guard) => guard,
+            Err(_) => return false,
+        };
+        if guard.contains(workspace_id) {
+            return false;
+        }
+        guard.insert(workspace_id.to_string());
+        true
+    }
+
+    fn finish(&self, workspace_id: &str) {
+        if let Ok(mut guard) = self.in_flight.lock() {
+            guard.remove(workspace_id);
+        }
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KnowledgeIndexCompletePayload {
+    workspace_id: String,
+    indexed: usize,
+    skipped: usize,
+    removed: usize,
+}
+
+struct IndexWorkspaceResult {
+    indexed: usize,
+    skipped: usize,
+    removed: usize,
+}
+
+fn is_indexable_extension(ext: &std::ffi::OsStr) -> bool {
+    ext == "md" || ext == "txt" || ext == "json" || ext == "yaml" || ext == "yml"
+}
+
+fn disk_revision(meta: &std::fs::Metadata) -> Result<(i64, i64), NoteforgeError> {
+    let mtime = meta
+        .modified()
+        .map_err(|e| NoteforgeError::Internal(e.to_string()))?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| NoteforgeError::Internal(e.to_string()))?
+        .as_secs() as i64;
+    Ok((mtime, meta.len() as i64))
+}
+
+fn index_workspace_files(
+    db: &Database,
+    workspace_id: &str,
+    root: &Path,
+) -> Result<IndexWorkspaceResult, NoteforgeError> {
+    let conn = db.conn.lock().map_err(|_| {
+        NoteforgeError::Internal("Database lock poisoned".to_string())
+    })?;
+    let note_repo = NoteRepo::new(&conn);
+    let cached_meta = note_repo.get_disk_meta_map(workspace_id)?;
+    let pipeline = IndexPipeline::new(&conn);
+
+    let mut indexed = 0usize;
+    let mut skipped = 0usize;
+    let mut seen_paths = HashSet::new();
+
+    for entry in walkdir::WalkDir::new(root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let file_path = entry.path();
+        let Some(ext) = file_path.extension() else {
+            continue;
+        };
+        if !is_indexable_extension(ext) {
+            continue;
+        }
+
+        let meta = entry
+            .metadata()
+            .map_err(|e| NoteforgeError::Internal(e.to_string()))?;
+        let (disk_mtime, disk_size) = disk_revision(&meta)?;
+
+        let relative_path = file_path
+            .strip_prefix(root)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .to_string();
+        seen_paths.insert(relative_path.clone());
+
+        if cached_meta
+            .get(&relative_path)
+            .is_some_and(|(mtime, size)| *mtime == disk_mtime && *size == disk_size)
+        {
+            skipped += 1;
+            continue;
+        }
+
+        let Ok(content) = std::fs::read_to_string(file_path) else {
+            continue;
+        };
+        let title = file_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+
+        if pipeline
+            .index_document(
+                workspace_id,
+                &relative_path,
+                &title,
+                &content,
+                disk_mtime,
+                disk_size,
+            )
+            .is_ok()
+        {
+            indexed += 1;
+        }
+    }
+
+    let mut removed = 0usize;
+    for path in note_repo.get_file_paths(workspace_id)? {
+        if seen_paths.contains(&path) {
+            continue;
+        }
+        if pipeline.remove_document(workspace_id, &path).is_ok() {
+            removed += 1;
+        }
+    }
+
+    Ok(IndexWorkspaceResult {
+        indexed,
+        skipped,
+        removed,
+    })
+}
+
+/// Schedule a full vault index on a background thread. Returns immediately with `0`.
 #[tauri::command]
 pub fn index_knowledge_base(
     request: IndexKnowledgeBaseRequest,
-    db: State<Database>,
+    app: AppHandle,
+    state: State<'_, KnowledgeIndexState>,
 ) -> Result<usize, NoteforgeError> {
     let path = Path::new(&request.path);
     if !path.exists() {
         return Err(NoteforgeError::NotFound("Path not found".to_string()));
     }
 
-    let conn = db.conn.lock().unwrap();
-    let pipeline = IndexPipeline::new(&conn);
-
-    let mut indexed = 0;
-
-    for entry in walkdir::WalkDir::new(path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        if entry.file_type().is_file() {
-            let file_path = entry.path();
-            if let Some(ext) = file_path.extension() {
-                if ext == "md" || ext == "txt" || ext == "json" || ext == "yaml" || ext == "yml" {
-                    if let Ok(content) = std::fs::read_to_string(file_path) {
-                        let title = file_path
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("Untitled")
-                            .to_string();
-
-                        let relative_path = file_path
-                            .strip_prefix(path)
-                            .unwrap_or(file_path)
-                            .to_string_lossy()
-                            .to_string();
-
-                        if pipeline
-                            .index_document(
-                                &request.workspace_id,
-                                &relative_path,
-                                &title,
-                                &content,
-                            )
-                            .is_ok()
-                        {
-                            indexed += 1;
-                        }
-                    }
-                }
-            }
-        }
+    if !state.try_start(&request.workspace_id) {
+        tracing::info!(
+            workspace_id = %request.workspace_id,
+            "knowledge index skipped (already in flight)"
+        );
+        return Ok(0);
     }
 
-    Ok(indexed)
+    let workspace_id = request.workspace_id.clone();
+    let path_str = request.path.clone();
+    let app_handle = app.clone();
+
+    std::thread::spawn(move || {
+        let result = (|| {
+            let db = app_handle.state::<Database>();
+            index_workspace_files(&db, &workspace_id, Path::new(&path_str))
+        })();
+
+        match result {
+            Ok(stats) => {
+                tracing::info!(
+                    workspace_id = %workspace_id,
+                    indexed = stats.indexed,
+                    skipped = stats.skipped,
+                    removed = stats.removed,
+                    "knowledge index complete"
+                );
+                let _ = app_handle.emit(
+                    "knowledge-index-complete",
+                    KnowledgeIndexCompletePayload {
+                        workspace_id: workspace_id.clone(),
+                        indexed: stats.indexed,
+                        skipped: stats.skipped,
+                        removed: stats.removed,
+                    },
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    error = %error,
+                    "knowledge index failed"
+                );
+            }
+        }
+
+        if let Some(index_state) = app_handle.try_state::<KnowledgeIndexState>() {
+            index_state.finish(&workspace_id);
+        }
+    });
+
+    Ok(0)
 }
 
 #[tauri::command]

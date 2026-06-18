@@ -1,27 +1,153 @@
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useEditorStore } from "@/store/editor";
 import type { EditorTab } from "@/store/editor";
-import { MonacoEditor } from "./MonacoEditor";
-import { MarkdownPanel } from "@/features/markdown/MarkdownPanel";
-import { JsonYamlPanel } from "./JsonYamlPanel";
+import { LargeFilePreview } from "./LargeFilePreview";
 import { TabBar } from "./TabBar";
 import { EditorStartupPlaceholder } from "./EditorStartupPlaceholder";
 import { WelcomeView } from "@/features/welcome/WelcomeView";
 import { isMarkdownTab } from "@/lib/editor-doc";
+import { ensureDocumentContentLoaded, getCore } from "@/core/runtime";
+import { hydrateDeferredTab } from "@/core/bridge/editor-sync";
+import { ensureMonacoSetup } from "@/lib/ensure-monaco-setup";
+import { useDocumentRecord } from "@/hooks/useDocumentContent";
+import { perfLog } from "@/lib/startup-perf";
+import { useStartupStore } from "@/store/startup";
+
+const MonacoEditor = lazy(() =>
+  import("./MonacoEditor").then((m) => ({ default: m.MonacoEditor })),
+);
+const MarkdownPanel = lazy(() =>
+  import("@/features/markdown/MarkdownPanel").then((m) => ({ default: m.MarkdownPanel })),
+);
+const JsonYamlPanel = lazy(() =>
+  import("./JsonYamlPanel").then((m) => ({ default: m.JsonYamlPanel })),
+);
 
 interface PaneProps {
   paneId: string;
 }
 
+function EditorSurfacePlaceholder() {
+  return <div className="h-full bg-bg-primary" />;
+}
+
+function TabHydratingPlaceholder({ name }: { name: string }) {
+  return (
+    <div className="flex h-full items-center justify-center text-text-secondary">
+      <div className="text-center">
+        <div className="mb-2 text-lg">正在打开 {name}…</div>
+        <div className="text-sm opacity-60">首次切换到此标签时需要加载文件</div>
+      </div>
+    </div>
+  );
+}
+
 function ActiveContent({ tab }: { tab: EditorTab }) {
+  const doc = useDocumentRecord(tab.documentId);
+  const splashVisible = useStartupStore((s) => s.splashVisible);
+  const [forcing, setForcing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hydrating, setHydrating] = useState(Boolean(tab.pendingRestore));
+  const [editorReady, setEditorReady] = useState(false);
+
+  useEffect(() => {
+    if (splashVisible) {
+      setEditorReady(false);
+      return;
+    }
+    let cancelled = false;
+    void ensureMonacoSetup().then(() => {
+      if (!cancelled) setEditorReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [splashVisible]);
+
+  useEffect(() => {
+    if (splashVisible || !tab.pendingRestore) {
+      if (!tab.pendingRestore) setHydrating(false);
+      return;
+    }
+    let cancelled = false;
+    setHydrating(true);
+    perfLog("editor.tab.hydrate.start", { tabId: tab.id, name: tab.displayName });
+    void hydrateDeferredTab(tab.id)
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : String(err));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHydrating(false);
+          perfLog("editor.tab.hydrate.end", { tabId: tab.id });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab.id, tab.pendingRestore, splashVisible]);
+
+  if (splashVisible || !editorReady) {
+    return <EditorSurfacePlaceholder />;
+  }
+
+  if (tab.pendingRestore || hydrating) {
+    return (
+      <>
+        {loadError ? (
+          <div className="bg-red-500/10 px-4 py-2 text-sm text-red-500">{loadError}</div>
+        ) : null}
+        <TabHydratingPlaceholder name={tab.displayName} />
+      </>
+    );
+  }
+
+  const resolvedDoc = doc ?? getCore().document.get(tab.documentId);
+
+  if (resolvedDoc?.tier === "huge" && !resolvedDoc.contentLoaded) {
+    return (
+      <LargeFilePreview
+        tab={tab}
+        forcing={forcing}
+        loadError={loadError}
+        onForceEdit={async () => {
+          setLoadError(null);
+          setForcing(true);
+          try {
+            await ensureDocumentContentLoaded(tab.documentId);
+          } catch (err) {
+            setLoadError(err instanceof Error ? err.message : String(err));
+          } finally {
+            setForcing(false);
+          }
+        }}
+      />
+    );
+  }
+
   if (isMarkdownTab(tab)) {
-    return <MarkdownPanel tab={tab} />;
+    return (
+      <Suspense fallback={<EditorSurfacePlaceholder />}>
+        <MarkdownPanel tab={tab} />
+      </Suspense>
+    );
   }
 
   if (tab.language === "json" || tab.language === "yaml") {
-    return <JsonYamlPanel tab={tab} />;
+    return (
+      <Suspense fallback={<EditorSurfacePlaceholder />}>
+        <JsonYamlPanel tab={tab} />
+      </Suspense>
+    );
   }
 
-  return <MonacoEditor tab={tab} />;
+  return (
+    <Suspense fallback={<EditorSurfacePlaceholder />}>
+      <MonacoEditor tab={tab} />
+    </Suspense>
+  );
 }
 
 export function EditorPane({ paneId }: PaneProps) {

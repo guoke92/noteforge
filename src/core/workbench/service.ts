@@ -1,10 +1,12 @@
 import type { DocumentId } from "../events";
-import type { LayoutState, PaneId, TabDescriptor, WorkspaceSession } from "./types";
+import type { LayoutState, PaneId, WorkspaceSession } from "./types";
 
 /**
  * ADR-006 / VS Code-inspired tab & split management.
  * Does not mutate document content — only layout and tab routing.
  */
+export type SessionPersistReason = "content" | "layout" | "immediate";
+
 export interface WorkbenchService {
   getActiveDocumentId(paneId?: PaneId): DocumentId | null;
 
@@ -34,12 +36,12 @@ export interface WorkbenchService {
   /** Restore after vault opened. Loads stored session when argument omitted. */
   restoreSession(session?: WorkspaceSession | null): Promise<boolean>;
 
-  persistSession(): Promise<void>;
+  persistSession(reason?: SessionPersistReason): Promise<void>;
 
   /** Persist immediately (tab open/close, app exit). */
   persistSessionNow(): Promise<void>;
 
-  schedulePersist(): void;
+  schedulePersist(reason?: SessionPersistReason): void;
 }
 
 export interface TabCloseRequest {

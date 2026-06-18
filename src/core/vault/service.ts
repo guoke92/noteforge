@@ -19,7 +19,18 @@ export interface VaultService {
 
   listRecent(): Promise<VaultDescriptor[]>;
 
-  readText(path: VaultPath): Promise<{ content: string; eol: "lf" | "crlf"; revision: string }>;
+  readText(path: VaultPath): Promise<{
+    content: string;
+    eol: "lf" | "crlf";
+    revision: string;
+    mtime: string;
+  }>;
+
+  readStat(path: VaultPath): Promise<{
+    size: number;
+    mtime: string;
+    lineCountEstimate: number;
+  }>;
 
   writeText(path: VaultPath, content: string, options?: WriteFileOptions): Promise<void>;
 

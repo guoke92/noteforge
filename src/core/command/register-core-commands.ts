@@ -63,10 +63,10 @@ export function registerCoreCommands(registry: CommandRegistry): void {
       title: "关闭标签",
       category: "file",
       keybindings: [{ chord: "Mod+w", when: "!inputContext" }],
-      enabled: (ctx) => !!ctx.activeDocumentId,
+      enabled: (ctx) => !!ctx.activeTabId,
       run: (ctx) => {
-        if (ctx.activeDocumentId) {
-          useEditorStore.getState().closeTab(ctx.activeDocumentId);
+        if (ctx.activeTabId) {
+          useEditorStore.getState().closeTab(ctx.activeTabId);
         }
       },
     }),
@@ -153,8 +153,8 @@ export function registerCoreCommands(registry: CommandRegistry): void {
       keybindings: [{ chord: "Mod+Shift+i", when: "markdown" }],
       enabled: (ctx) => ctx.isMarkdownActive,
       run: (ctx) => {
-        if (ctx.activeDocumentId) {
-          useEditorStore.getState().cycleSurfaceMode(ctx.activeDocumentId);
+        if (ctx.activeTabId) {
+          useEditorStore.getState().cycleSurfaceMode(ctx.activeTabId);
         }
       },
     }),

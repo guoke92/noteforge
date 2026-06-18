@@ -39,17 +39,19 @@ export interface EditorSurfaceAdapter {
 
 export interface EditorHostService {
   getActiveMode(documentId: DocumentId): EditorSurfaceMode;
-  setMode(documentId: DocumentId, mode: EditorSurfaceMode): Promise<void>;
+  setMode(tabId: string, mode: EditorSurfaceMode): Promise<void>;
   /** @deprecated Phase-1 adapters — surfaces register LiveSurfaceHandle directly. */
   registerAdapter(adapter: EditorSurfaceAdapter): () => void;
   registerSurface(
+    tabId: string,
     documentId: DocumentId,
     mode: EditorSurfaceMode,
     handle: LiveSurfaceHandle,
   ): () => void;
   revealLine(documentId: DocumentId, line: number): boolean;
   applyExternalContent(documentId: DocumentId, content: string): void;
-  flushSurface(documentId: DocumentId, mode: EditorSurfaceMode): void;
+  flushSurface(tabId: string, mode: EditorSurfaceMode): void;
+  flushAllSurfacesForDocument(documentId: DocumentId): void;
 }
 
 /** ADR-005: Mode switch protocol — enforced by EditorHost implementation. */

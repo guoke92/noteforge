@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { FileEntry, WorkspaceConfig, WorkspaceView } from "@/types";
-import { fs, workspace as workspaceApi, knowledge } from "@/ipc";
+import { fs, workspace as workspaceApi } from "@/ipc";
+import { perfAsync, perfLog } from "@/lib/startup-perf";
 
 interface WorkspaceState {
   current: WorkspaceView | null;
@@ -61,8 +62,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   async openWorkspace(path: string) {
     set({ loading: true, error: null });
     try {
-      const ws = await workspaceApi.open(path);
-      const rootChildren = await loadDir(ws.path);
+      const ws = await perfAsync("workspace.ipc.open", () => workspaceApi.open(path), { path });
+      const rootChildren = await perfAsync("workspace.fs.list-root", () => loadDir(ws.path), {
+        path: ws.path,
+      });
       const root: FileEntry = {
         path: ws.path,
         name: ws.name,
@@ -75,9 +78,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         expandedDirs: new Set<string>([ws.path]),
         loading: false,
       });
-      if (ws.autoIndex) {
-        knowledge.indexWorkspace(ws.id, ws.path).catch(() => {});
-      }
+      perfLog("workspace.tree.ready", {
+        rootChildren: rootChildren.length,
+        autoIndex: ws.autoIndex,
+      });
     } catch (e) {
       set({ loading: false, error: String(e) });
       throw e;

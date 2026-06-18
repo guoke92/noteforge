@@ -3,9 +3,11 @@ import { useWorkspaceStore } from "@/store/workspace";
 import { basename } from "@/lib/utils";
 import type { FileEntry } from "@/types";
 import type { EventBus, VaultPath } from "../events";
-import { buildDiskRevision } from "../document/utils";
+import { buildDiskRevision, buildStatRevision } from "../document/utils";
 import type { VaultDescriptor, VaultTreeNode } from "./types";
 import type { VaultService } from "./service";
+import { VAULT_POLL_INTERVAL_MS } from "../platform/timing";
+import { perfAsync, perfLog } from "@/lib/startup-perf";
 import {
   startVaultRootWatch,
   stopVaultRootWatch,
@@ -41,14 +43,17 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
     return watchSnapshot.size === 0 || watchSnapshot.has(path);
   }
 
+  async function readWatchRevision(path: VaultPath): Promise<string> {
+    const stat = await fs.stat(path);
+    return buildStatRevision(stat.mtime, stat.size);
+  }
+
   async function emitChangeIfDiskRevisionChanged(path: VaultPath): Promise<void> {
     if (!shouldTrackPath(path) || selfWritePaths.has(path)) return;
 
     const knownRev = watchSnapshot.get(path);
     try {
-      const { content } = await fs.read(path);
-      const info = await fs.info(path);
-      const rev = buildDiskRevision(content, info.modified);
+      const rev = await readWatchRevision(path);
       if (knownRev && rev === knownRev) return;
       watchSnapshot.set(path, rev);
       eventBus.emit({ type: "vault:file-changed", vaultPath: path });
@@ -104,6 +109,7 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
     },
 
     async open(rootPath) {
+      return perfAsync("vault.open", async () => {
       const normalized = rootPath.replace(/\/+$/, "");
       let ws = useWorkspaceStore.getState().current;
 
@@ -134,12 +140,14 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
         autoIndex: ws.autoIndex,
         excludePatterns: ws.excludePatterns,
       };
-      await ensureNativeWatch();
+      await perfAsync("vault.ensure-native-watch", () => ensureNativeWatch());
       if (isTauri()) {
-        await startVaultRootWatch(rootPath);
+        await perfAsync("vault.start-root-watch", () => startVaultRootWatch(rootPath));
       }
       eventBus.emit({ type: "vault:opened", vaultPath: rootPath, vaultId: current.id });
+      perfLog("vault.open.done", { rootPath: normalized, vaultId: current.id });
       return current;
+      }, { rootPath });
     },
 
     async close() {
@@ -170,7 +178,16 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
       } catch {
         /* ignore */
       }
-      return { content, eol: "lf" as const, revision: buildDiskRevision(content, modified) };
+      return {
+        content,
+        eol: "lf" as const,
+        revision: buildDiskRevision(content, modified),
+        mtime: modified,
+      };
+    },
+
+    async readStat(path) {
+      return fs.stat(path);
     },
 
     async writeText(path, content) {
@@ -184,9 +201,14 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
         if (watchSnapshot.has(path)) {
           try {
             const info = await fs.info(path);
-            watchSnapshot.set(path, buildDiskRevision(content, info.modified));
+            const byteSize = new TextEncoder().encode(content).length;
+            watchSnapshot.set(path, buildStatRevision(info.modified, byteSize));
           } catch {
-            watchSnapshot.set(path, buildDiskRevision(content, ""));
+            try {
+              watchSnapshot.set(path, await readWatchRevision(path));
+            } catch {
+              /* ignore */
+            }
           }
         }
       } finally {
@@ -266,9 +288,7 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
         if (!current) return;
         for (const [path, prevRev] of watchSnapshot) {
           try {
-            const { content } = await fs.read(path);
-            const info = await fs.info(path);
-            const rev = buildDiskRevision(content, info.modified);
+            const rev = await readWatchRevision(path);
             if (rev !== prevRev) {
               watchSnapshot.set(path, rev);
               eventBus.emit({ type: "vault:file-changed", vaultPath: path });
@@ -278,7 +298,7 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
             eventBus.emit({ type: "vault:file-deleted", vaultPath: path });
           }
         }
-      }, 3000);
+      }, VAULT_POLL_INTERVAL_MS);
     },
 
     async stopWatching() {
@@ -297,8 +317,14 @@ export function createVaultService(deps: VaultServiceDeps): VaultService {
       watchSnapshot.clear();
     },
 
-    trackForWatch(path, revision) {
-      watchSnapshot.set(path, revision);
+    trackForWatch(path, _revision) {
+      void readWatchRevision(path)
+        .then((rev) => {
+          watchSnapshot.set(path, rev);
+        })
+        .catch(() => {
+          if (_revision) watchSnapshot.set(path, _revision);
+        });
       if (!isTauri()) {
         void this.startWatching();
       }

@@ -1,0 +1,20 @@
+schema_version: 1
+module_path: frontend_app/shell_and_dialogs
+title: 应用外壳与全局对话框管理
+scope:
+    - src/components/topbar/
+    - src/components/dialogs/
+    - src/components/splash/
+    - src/App.tsx
+    - src/main.tsx
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/core_infrastructure/dialog_system
+    - path: frontend_app/core_infrastructure/command_system
+    - path: backend_tauri/search_memory_scratch
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: frontend_app/shared_ui_and_utils
+    - path: docs_design
+    - path: backend_tauri/config_encryption_core
+    - path: frontend_app/core_infrastructure/vault_service

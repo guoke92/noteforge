@@ -29,6 +29,7 @@ export function useTabStripScroll(
   tabCount: number,
   barRef: RefObject<HTMLElement | null>,
   toolbarRef: RefObject<HTMLElement | null>,
+  sessionRestored = false,
 ) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLDivElement>());
@@ -87,11 +88,33 @@ export function useTabStripScroll(
 
   useLayoutEffect(() => {
     if (!activeTabId) return;
-    const tabEl = tabRefs.current.get(activeTabId);
-    tabEl?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
-    const t = window.setTimeout(updateScrollState, 200);
+    const scrollToActive = (behavior: ScrollBehavior = "smooth") => {
+      const tabEl = tabRefs.current.get(activeTabId);
+      tabEl?.scrollIntoView({ inline: "nearest", block: "nearest", behavior });
+      updateScrollState();
+    };
+    scrollToActive();
+    const t = window.setTimeout(() => scrollToActive(), 200);
     return () => window.clearTimeout(t);
   }, [activeTabId, tabCount, updateScrollState]);
+
+  useLayoutEffect(() => {
+    if (!sessionRestored || !activeTabId) return;
+    const scrollToActive = () => {
+      const tabEl = tabRefs.current.get(activeTabId);
+      tabEl?.scrollIntoView({ inline: "start", block: "nearest", behavior: "auto" });
+      updateScrollState();
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToActive);
+    });
+    const t1 = window.setTimeout(scrollToActive, 100);
+    const t2 = window.setTimeout(scrollToActive, 400);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [sessionRestored, activeTabId, tabCount, updateScrollState]);
 
   const scrollBy = useCallback((delta: number) => {
     scrollRef.current?.scrollBy({ left: delta, behavior: "smooth" });

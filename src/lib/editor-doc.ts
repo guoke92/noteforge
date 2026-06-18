@@ -1,5 +1,6 @@
 import type { EditorTab } from "@/store/editor";
 import { basename, detectLanguageFromName, fileExt } from "@/lib/utils";
+import { defaultExtensionForLanguage as extForLanguage } from "@/lib/language-registry";
 
 export function isScratchTab(tab: EditorTab): boolean {
   return tab.kind === "scratch";
@@ -60,26 +61,7 @@ export function normalizeScratchDisplayNames(scratchTabs: EditorTab[]): EditorTa
 }
 
 export function defaultExtensionForLanguage(language: string): string {
-  const map: Record<string, string> = {
-    markdown: "md",
-    json: "json",
-    yaml: "yml",
-    typescript: "ts",
-    javascript: "js",
-    python: "py",
-    rust: "rs",
-    go: "go",
-    java: "java",
-    html: "html",
-    css: "css",
-    toml: "toml",
-    xml: "xml",
-    shell: "sh",
-    sql: "sql",
-    text: "txt",
-    plaintext: "txt",
-  };
-  return map[language] || "txt";
+  return extForLanguage(language);
 }
 
 /**
@@ -163,29 +145,27 @@ export function detectLanguageFromContent(content: string): string | null {
 }
 
 /** Extension for Save As: strictly from content; unknown → txt. */
-export function extensionForSave(tab: EditorTab): string {
-  const fromContent = detectLanguageFromContent(tab.content);
+export function extensionForSave(content: string): string {
+  const fromContent = detectLanguageFromContent(content);
   if (fromContent) return defaultExtensionForLanguage(fromContent);
   return "txt";
 }
 
-/** Language label for tab badge / highlighter: content-first, then path, else plain text. */
+/** Language label for tab badge / highlighter: language-first, then path, else plain text. */
 export function tabDisplayLanguage(
-  tab: Pick<EditorTab, "kind" | "path" | "content" | "language">,
+  tab: Pick<EditorTab, "kind" | "path" | "language">,
 ): string {
-  const fromContent = detectLanguageFromContent(tab.content);
-  if (fromContent) return fromContent;
+  if (tab.language && tab.language !== "plaintext") return tab.language;
   if (tab.kind === "workspace" && tab.path) {
     return detectLanguageFromName(basename(tab.path));
   }
   return "plaintext";
 }
 
-/** Markdown preview/edit modes apply only when content (or .md path) is markdown. */
-export function isMarkdownTab(tab: Pick<EditorTab, "kind" | "path" | "content">): boolean {
-  const detected = detectLanguageFromContent(tab.content);
-  if (detected === "markdown") return true;
-  if (detected !== null) return false;
+/** Markdown preview/edit modes apply only when language (or .md path) is markdown. */
+export function isMarkdownTab(tab: Pick<EditorTab, "kind" | "path" | "language">): boolean {
+  if (tab.language === "markdown") return true;
+  if (tab.language && tab.language !== "plaintext") return false;
   if (tab.kind === "workspace" && tab.path) {
     const ext = fileExt(basename(tab.path));
     return ext === "md" || ext === "markdown";
@@ -193,8 +173,8 @@ export function isMarkdownTab(tab: Pick<EditorTab, "kind" | "path" | "content">)
   return false;
 }
 
-export function suggestedSaveFileName(tab: EditorTab): string {
-  const ext = extensionForSave(tab);
+export function suggestedSaveFileName(tab: EditorTab, content: string): string {
+  const ext = extensionForSave(content);
   const base = tab.displayName.replace(/\.[^./]+$/, "") || tab.displayName;
   if (UNTITLED_RE.test(base) || !tab.displayName.includes(".")) {
     return `${base}.${ext}`;

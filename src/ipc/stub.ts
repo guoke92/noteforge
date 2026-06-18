@@ -370,6 +370,30 @@ export async function getFileInfo(path: string): Promise<FileInfo> {
   };
 }
 
+export async function fileStat(
+  path: string,
+): Promise<{ size: number; mtime: string; lineCountEstimate: number }> {
+  await sleep(20);
+  if (!fileStore.has(path)) throw new Error("FILE_NOT_FOUND");
+  const content = fileStore.get(path)!;
+  const size = new TextEncoder().encode(content).length;
+  const lineCountEstimate = (content.match(/\n/g)?.length ?? 0) + 1;
+  return { size, mtime: new Date().toISOString(), lineCountEstimate };
+}
+
+export async function readFileRange(
+  path: string,
+  offset: number,
+  length: number,
+): Promise<{ content: string; totalSize: number; truncated: boolean }> {
+  await sleep(20);
+  if (!fileStore.has(path)) throw new Error("FILE_NOT_FOUND");
+  const full = fileStore.get(path)!;
+  const totalSize = new TextEncoder().encode(full).length;
+  const content = full.slice(offset, offset + length);
+  return { content, totalSize, truncated: offset + length < totalSize };
+}
+
 /* ============================================================
  *  Editor
  * ============================================================ */
@@ -1052,4 +1076,85 @@ export async function draftDeleteBuffer(vaultPath: string): Promise<void> {
   const map = readDraftBuffers();
   delete map[vaultPath];
   writeDraftBuffers(map);
+}
+
+/* ============================================================
+ *  Local History (in-memory stub)
+ * ============================================================ */
+
+const HISTORY_KEY = "noteforge:local-history:stub";
+
+interface StubSnapshot {
+  timestamp: string;
+  size: number;
+  vaultPath: string;
+  content: string;
+}
+
+function readHistoryStore(): Record<string, StubSnapshot[]> {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, StubSnapshot[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeHistoryStore(store: Record<string, StubSnapshot[]>): void {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(store));
+}
+
+export async function historySaveSnapshot(
+  vaultPath: string,
+  content: string,
+): Promise<{ timestamp: string; size: number; vaultPath: string }> {
+  await sleep(10);
+  const store = readHistoryStore();
+  const ts = new Date().toISOString();
+  const snap: StubSnapshot = {
+    timestamp: ts,
+    size: new TextEncoder().encode(content).length,
+    vaultPath,
+    content,
+  };
+  if (!store[vaultPath]) store[vaultPath] = [];
+  store[vaultPath].unshift(snap);
+  // Keep max 50
+  if (store[vaultPath].length > 50) store[vaultPath].length = 50;
+  writeHistoryStore(store);
+  return { timestamp: ts, size: snap.size, vaultPath };
+}
+
+export async function historyListSnapshots(
+  vaultPath: string,
+): Promise<{ timestamp: string; size: number; vaultPath: string }[]> {
+  await sleep(10);
+  const store = readHistoryStore();
+  return (store[vaultPath] ?? []).map(({ timestamp, size, vaultPath: vp }) => ({
+    timestamp,
+    size,
+    vaultPath: vp,
+  }));
+}
+
+export async function historyLoadSnapshot(
+  vaultPath: string,
+  timestamp: string,
+): Promise<string | null> {
+  await sleep(10);
+  const store = readHistoryStore();
+  const snap = (store[vaultPath] ?? []).find((s) => s.timestamp === timestamp);
+  return snap?.content ?? null;
+}
+
+export async function historyPruneSnapshots(_vaultPath: string): Promise<void> {
+  await sleep(5);
+  // Stub: no-op (real backend handles retention policy)
+}
+
+export async function historyDelete(vaultPath: string): Promise<void> {
+  await sleep(10);
+  const store = readHistoryStore();
+  delete store[vaultPath];
+  writeHistoryStore(store);
 }

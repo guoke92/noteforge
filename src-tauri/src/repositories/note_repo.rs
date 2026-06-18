@@ -35,18 +35,48 @@ impl<'a> NoteRepo<'a> {
         title: Option<&str>,
         content: Option<&str>,
         language: Option<&str>,
+        disk_mtime: i64,
+        disk_size: i64,
     ) -> Result<(), NoteforgeError> {
         self.conn.execute(
-            "INSERT INTO notes (id, workspace_id, file_path, title, content, language)
-             VALUES (?, ?, ?, ?, ?, ?)
+            "INSERT INTO notes (id, workspace_id, file_path, title, content, language, disk_mtime, disk_size)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(workspace_id, file_path) DO UPDATE SET
                title = excluded.title,
                content = excluded.content,
                language = excluded.language,
+               disk_mtime = excluded.disk_mtime,
+               disk_size = excluded.disk_size,
                updated_at = CURRENT_TIMESTAMP",
-            rusqlite::params![id, workspace_id, file_path, title, content, language],
+            rusqlite::params![
+                id,
+                workspace_id,
+                file_path,
+                title,
+                content,
+                language,
+                disk_mtime,
+                disk_size
+            ],
         )?;
         Ok(())
+    }
+
+    /// Cached disk revision per indexed file — used for incremental re-index.
+    pub fn get_disk_meta_map(
+        &self,
+        workspace_id: &str,
+    ) -> Result<std::collections::HashMap<String, (i64, i64)>, NoteforgeError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT file_path, disk_mtime, disk_size FROM notes
+             WHERE workspace_id = ? AND disk_mtime IS NOT NULL AND disk_size IS NOT NULL",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![workspace_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+            })?
+            .filter_map(|r| r.ok());
+        Ok(rows.map(|(path, mtime, size)| (path, (mtime, size))).collect())
     }
 
     pub fn find_by_id(&self, id: &str) -> Result<Option<NoteView>, NoteforgeError> {

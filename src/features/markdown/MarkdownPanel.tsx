@@ -26,7 +26,7 @@ export function MarkdownPanel({ tab }: Props) {
     if (!revealLineRequest || revealLineRequest.tabId !== tab.id) return;
 
     const line = revealLineRequest.line;
-    const attempt = () => getCore().editorHost.revealLine(tab.id, line);
+    const attempt = () => getCore().editorHost.revealLine(tab.documentId, line);
 
     if (attempt()) {
       consumeRevealLine();

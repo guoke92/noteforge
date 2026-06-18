@@ -14,6 +14,7 @@ import {
 import { useRef } from "react";
 import { useEditorStore, isDirty, isMainPane, type EditorTab } from "@/store/editor";
 import { isMarkdownTab, isScratchTab, tabDisplayLanguage, tabLabel } from "@/lib/editor-doc";
+import { languageBadge } from "@/lib/language-registry";
 import { resolveSurfaceMode } from "@/lib/surface-mode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Dropdown } from "@/components/ui/Dropdown";
@@ -25,19 +26,7 @@ interface Props {
 }
 
 function langBadge(lang: string): string {
-  return (
-    {
-      markdown: "MD",
-      json: "JS",
-      yaml: "YML",
-      typescript: "TS",
-      javascript: "JS",
-      python: "PY",
-      rust: "RS",
-      plaintext: "TXT",
-      text: "TXT",
-    }[lang] || lang.slice(0, 3).toUpperCase()
-  );
+  return languageBadge(lang);
 }
 
 function paneLabel(paneId: string, panes: string[]): string {
@@ -303,6 +292,7 @@ export function TabBar({ paneId }: Props) {
   const allTabs = useEditorStore((s) => s.tabs);
   const tabs = allTabs.filter((t) => t.paneId === paneId);
   const activeId = useEditorStore((s) => s.activeTabIdByPane[paneId]);
+  const sessionRestored = useEditorStore((s) => s.sessionRestored);
   const activeTab = tabs.find((t) => t.id === activeId);
   const setActive = useEditorStore((s) => s.setActive);
   const closeTab = useEditorStore((s) => s.closeTab);
@@ -323,7 +313,7 @@ export function TabBar({ paneId }: Props) {
     scrollLeft,
     scrollRight,
     onWheel,
-  } = useTabStripScroll(activeId, tabs.length, barRef, toolbarRef);
+  } = useTabStripScroll(activeId, tabs.length, barRef, toolbarRef, sessionRestored);
 
   const plusPinned = needsScroll && tabs.length > 0;
 

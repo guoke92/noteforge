@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type SidebarMode = "files" | "memory" | "graph";
-export type RightPanelMode = "backlinks" | "outline" | "properties" | "tree" | "ai";
+export type RightPanelMode = "backlinks" | "outline" | "properties" | "tree" | "ai" | "history";
 
 interface UIState {
   sidebarOpen: boolean;

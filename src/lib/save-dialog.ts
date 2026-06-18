@@ -25,10 +25,13 @@ export async function pickSaveFilePath(
 ): Promise<string | null> {
   if (!isTauri()) return null;
 
+  const { getCore } = await import("@/core/runtime");
+  const content = getCore().document.get(tab.documentId)?.content ?? "";
+
   const { save } = await import("@tauri-apps/plugin-dialog");
   const dir = await defaultSaveDirectory(workspacePath);
-  const fileName = suggestedSaveFileName(tab);
-  const ext = extensionForSave(tab);
+  const fileName = suggestedSaveFileName(tab, content);
+  const ext = extensionForSave(content);
   const defaultPath = dir ? `${dir}/${fileName}` : fileName;
 
   return save({

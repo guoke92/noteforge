@@ -13,3 +13,4 @@ pub mod pipeline;
 pub mod scratch;
 pub mod workspace_draft;
 pub mod workbench_session;
+pub mod local_history;

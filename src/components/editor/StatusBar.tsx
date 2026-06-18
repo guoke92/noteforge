@@ -1,6 +1,7 @@
 import { Bot, Database, FileWarning, Sparkles, WifiOff } from "lucide-react";
 import { useEditorStore, isDirty } from "@/store/editor";
 import { isScratchTab } from "@/lib/editor-doc";
+import { useDocumentRecord } from "@/hooks/useDocumentContent";
 import { useWorkspaceStore } from "@/store/workspace";
 import { useUIStore } from "@/store/ui";
 import { useAIStore } from "@/store/ai";
@@ -10,6 +11,12 @@ import {
   DEFAULT_CARET_STATUS,
   formatSelectionSummary,
 } from "@/lib/editor-caret-status";
+import { useLargeFileOverrides, selectDocumentOverrideKey, EMPTY_OVERRIDES } from "@/store/large-file-overrides";
+import {
+  LARGE_FILE_FEATURE_LABELS,
+  listDegradedFeatures,
+} from "@/core/document/large-file-features";
+import { useMemo } from "react";
 
 const LANGUAGES = [
   "markdown",
@@ -45,6 +52,16 @@ export function StatusBar() {
   const selectModel = useAIStore((s) => s.selectModel);
 
   const tab = tabs.find((t) => t.id === activeId);
+  const doc = useDocumentRecord(tab?.documentId ?? "");
+  const enableFeature = useLargeFileOverrides((s) => s.enable);
+  const overrideKey = useLargeFileOverrides((s) =>
+    selectDocumentOverrideKey(s, tab?.documentId),
+  );
+  const degradedFeatures = useMemo(() => {
+    if (!tab || !doc || doc.tier === "normal") return [];
+    const overrides = useLargeFileOverrides.getState().byDocument[tab.documentId] ?? EMPTY_OVERRIDES;
+    return listDegradedFeatures(doc.tier, new Set(overrides));
+  }, [tab, doc, overrideKey]);
   const dirty = tab && isDirty(tab);
   const caret = useEditorStore((s) =>
     activeId ? (s.caretStatusByTab[activeId] ?? DEFAULT_CARET_STATUS) : DEFAULT_CARET_STATUS,
@@ -99,6 +116,25 @@ export function StatusBar() {
       <span>LF</span>
 
       <div className="flex-1" />
+
+      {degradedFeatures.length > 0 && tab && doc ? (
+        <>
+          <Dropdown
+            trigger={
+              <button className="rounded-sm bg-warning/10 px-2 py-0.5 text-warning hover:bg-warning/20">
+                大文件模式 · {degradedFeatures.length} 项已降级
+              </button>
+            }
+            side="top"
+            align="end"
+            items={degradedFeatures.map((feature) => ({
+              label: `启用${LARGE_FILE_FEATURE_LABELS[feature]}`,
+              onSelect: () => enableFeature(tab.documentId, feature),
+            }))}
+          />
+          <Separator />
+        </>
+      ) : null}
 
       {tab && isScratchTab(tab) && (
         <span className="rounded-sm bg-bg-tertiary px-2 py-0.5 text-text-tertiary">草稿</span>

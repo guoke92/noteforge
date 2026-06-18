@@ -1,0 +1,20 @@
+schema_version: 1
+module_path: ""
+title: NoteForge 桌面应用根工作区
+scope:
+    - README.md
+    - .gitignore
+    - .eslintrc.json
+    - .prettierrc.json
+    - AGENTS.md
+    - index.html
+    - package.json
+    - pnpm-lock.yaml
+    - postcss.config.js
+    - tailwind.config.js
+    - tsconfig.json
+    - vite.config.ts
+    - TECHNICAL_VERIFICATION.md
+source_files: []
+depends_on: []
+related_to: []

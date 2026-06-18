@@ -1,0 +1,23 @@
+schema_version: 1
+module_path: backend_tauri/search_memory_scratch
+title: 搜索、记忆与草稿状态管理
+scope:
+    - src-tauri/src/commands/search.rs
+    - src-tauri/src/commands/memory.rs
+    - src-tauri/src/commands/scratch.rs
+    - src-tauri/src/models/search.rs
+    - src-tauri/src/models/memory.rs
+    - src-tauri/src/models/scratch.rs
+    - src-tauri/src/scratch.rs
+    - src-tauri/src/repositories/embedding_repo.rs
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_tauri/ai_knowledge
+    - path: frontend_app/shell_and_dialogs
+    - path: backend_tauri/workspace_editor
+    - path: frontend_app/core_infrastructure/vault_service
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: frontend_app/shared_ui_and_utils
+    - path: backend_tauri/session_draft_vault
+    - path: frontend_app/core_infrastructure/command_system

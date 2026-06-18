@@ -14,6 +14,7 @@ import {
   suggestedSaveFileName,
   tabLabel,
 } from "@/lib/editor-doc";
+import { useDocumentContent } from "@/hooks/useDocumentContent";
 import { promptSaveScratchTab } from "@/lib/save-dialog";
 import {
   completeDraftRestoreChoice,
@@ -51,7 +52,7 @@ function closeDialog() {
 }
 
 function ConfirmCloseDialog({ request }: { request: Extract<DialogRequest, { kind: "confirm-close" }> }) {
-  const tabId = request.documentId;
+  const tabId = request.tabId;
   const wsPath = useWorkspaceStore((s) => s.current?.path);
   const tab = useEditorStore((s) => s.tabs.find((t) => t.id === tabId));
   const discardAndCloseTab = useEditorStore((s) => s.discardAndCloseTab);
@@ -77,7 +78,7 @@ function ConfirmCloseDialog({ request }: { request: Extract<DialogRequest, { kin
         tabId,
         wsPath,
         saveTabAs,
-        (tid) => getCore().dialog.open({ kind: "save-as", documentId: tid }),
+        (tid) => getCore().dialog.open({ kind: "save-as", tabId: tid }),
       );
       const updated = useEditorStore.getState().tabs.find((t) => t.id === tabId);
       if (updated && updated.kind !== "scratch") {
@@ -136,20 +137,21 @@ function ConfirmCloseDialog({ request }: { request: Extract<DialogRequest, { kin
 }
 
 function SaveAsDialogView({ request }: { request: Extract<DialogRequest, { kind: "save-as" }> }) {
-  const tabId = request.documentId;
+  const tabId = request.tabId;
   const tab = useEditorStore((s) => s.tabs.find((t) => t.id === tabId));
   const saveTabAs = useEditorStore((s) => s.saveTabAs);
   const wsPath = useWorkspaceStore((s) => s.current?.path);
+  const docContent = useDocumentContent(tab?.documentId ?? "");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (tab) {
-      setFileName(suggestedSaveFileName(tab));
+      setFileName(suggestedSaveFileName(tab, docContent ?? ""));
       setError(null);
     }
-  }, [tab, tab?.content, tab?.language]);
+  }, [tab, docContent, tab?.language]);
 
   const submit = async () => {
     if (!tab) return;
@@ -159,7 +161,7 @@ function SaveAsDialogView({ request }: { request: Extract<DialogRequest, { kind:
       return;
     }
     if (!name.includes(".")) {
-      name = `${name}.${extensionForSave(tab)}`;
+      name = `${name}.${extensionForSave(docContent ?? "")}`;
     }
     if (name.includes("/") || name.includes("\\")) {
       setError("文件名不能包含路径分隔符");
@@ -337,8 +339,11 @@ function ConflictDialogView({ request }: { request: Extract<DialogRequest, { kin
     await getCore().document.resolveConflict(conflict.documentId, resolution);
     const doc = getCore().document.get(conflict.documentId);
     if (doc) {
-      const { syncDocumentToEditorTabs } = await import("@/core/bridge/editor-sync");
+      const { syncDocumentToEditorTabs, pushContentToSurface } = await import("@/core/bridge/editor-sync");
       syncDocumentToEditorTabs(doc);
+      if (resolution === "reload-from-disk") {
+        pushContentToSurface(doc);
+      }
     }
   };
 

@@ -1,4 +1,5 @@
 import type { DocumentId, VaultPath } from "../events";
+import type { FileTier } from "./file-tier";
 
 /** ADR-001: Canonical persisted form is always Markdown text. */
 export type DocumentContent = string;
@@ -39,6 +40,8 @@ export interface DiskSnapshot {
   content: DocumentContent;
   encoding: "utf-8";
   eol: EndOfLine;
+  /** RFC3339 disk mtime at last sync — for draft O(1) compare (avoids parsing revision). */
+  mtime?: string;
 }
 
 /**
@@ -53,6 +56,16 @@ export interface DocumentRecord {
   content: DocumentContent;
   baseline: DocumentContent;
   dirty: boolean;
+  /** Incremented on every edit. Dirty = revision !== savedRevision. */
+  revision: number;
+  /** Revision at last save/revert/open. */
+  savedRevision: number;
+  /** File size in bytes at open time. */
+  fileSize: number;
+  /** Size-based tier: normal / large / huge. */
+  tier: FileTier;
+  /** False for huge files opened in preview-only mode (content not read from disk). */
+  contentLoaded: boolean;
   lifecycle: DocumentLifecycle;
   disk: DiskSnapshot | null;
   viewState: ViewState;
@@ -72,6 +85,8 @@ export interface OpenDocumentOptions {
   restoreViewState?: boolean;
   /** Initial mode when creating ephemeral documents. */
   initialMode?: EditorSurfaceMode;
+  /** Session restore — skip interactive draft conflict; prefer draft cache. */
+  restoreSession?: boolean;
 }
 
 export interface CreateEphemeralOptions {

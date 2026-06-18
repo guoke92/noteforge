@@ -1,4 +1,8 @@
-import { knowledge as knowledgeIpc } from "@/ipc";
+import { knowledge as knowledgeIpc, isTauri } from "@/ipc";
+import {
+  KNOWLEDGE_REINDEX_DEBOUNCE_MS,
+  KNOWLEDGE_STARTUP_DEFER_MS,
+} from "../platform/timing";
 import { useWorkspaceStore } from "@/store/workspace";
 import {
   collectMarkdownNotes,
@@ -9,12 +13,12 @@ import {
 import type { DocumentService } from "../document/service";
 import type { EventBus, VaultPath } from "../events";
 import type { VaultService } from "../vault/service";
+import { perfLog } from "@/lib/startup-perf";
 import type {
   BacklinkHit,
   HeadingIndexEntry,
   KnowledgeQueryService,
   LinkIndexEntry,
-  NoteIndexEntry,
   WikiResolveResult,
 } from "./types";
 
@@ -136,11 +140,22 @@ export function createKnowledgeQueryService(deps: KnowledgeQueryServiceDeps): Kn
 
     async reindexAll() {
       const current = vault.getCurrent();
-      if (!current) return;
+      if (!current) {
+        perfLog("knowledge.reindexAll skipped (no vault)");
+        return;
+      }
+      if (!current.autoIndex) {
+        perfLog("knowledge.reindexAll skipped (autoIndex off)", { rootPath: current.rootPath });
+        return;
+      }
       try {
         await knowledgeIpc.indexWorkspace(current.id, current.rootPath);
+        perfLog("knowledge.reindexAll.scheduled", { rootPath: current.rootPath });
       } catch (e) {
         console.error("knowledge reindex failed", e);
+        perfLog("knowledge.reindexAll.failed", {
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     },
   };
@@ -153,24 +168,65 @@ export function wireKnowledgeIndexer(
   knowledge: KnowledgeQueryService,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const schedule = () => {
+  let startupTimer: ReturnType<typeof setTimeout> | null = null;
+  let isFirstVaultOpen = true;
+
+  const schedule = (delayMs = KNOWLEDGE_REINDEX_DEBOUNCE_MS) => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
+      perfLog("knowledge.reindexAll scheduled (debounced)");
       void knowledge.reindexAll().catch(console.error);
-    }, 1500);
+    }, delayMs);
+  };
+
+  const scheduleStartup = () => {
+    if (startupTimer) clearTimeout(startupTimer);
+    perfLog("knowledge.reindexAll startup defer", { deferMs: KNOWLEDGE_STARTUP_DEFER_MS });
+    startupTimer = setTimeout(() => {
+      startupTimer = null;
+      perfLog("knowledge.reindexAll scheduled (startup idle)");
+      void knowledge.reindexAll().catch(console.error);
+    }, KNOWLEDGE_STARTUP_DEFER_MS);
   };
 
   const unsubs = [
-    eventBus.subscribe("vault:opened", schedule),
-    eventBus.subscribe("document:saved", schedule),
-    eventBus.subscribe("vault:file-created", schedule),
-    eventBus.subscribe("vault:file-deleted", schedule),
-    eventBus.subscribe("vault:file-renamed", schedule),
+    eventBus.subscribe("vault:opened", () => {
+      if (isFirstVaultOpen) {
+        isFirstVaultOpen = false;
+        scheduleStartup();
+        return;
+      }
+      schedule();
+    }),
+    eventBus.subscribe("document:saved", () => schedule()),
+    eventBus.subscribe("vault:file-created", () => schedule()),
+    eventBus.subscribe("vault:file-deleted", () => schedule()),
+    eventBus.subscribe("vault:file-renamed", () => schedule()),
   ];
+
+  let unlistenComplete: (() => void) | null = null;
+  if (isTauri()) {
+    void import("@tauri-apps/api/event").then(({ listen }) =>
+      listen<{ workspaceId: string; indexed: number; skipped?: number; removed?: number }>(
+        "knowledge-index-complete",
+        (event) => {
+        perfLog("knowledge.reindexAll.done", {
+          indexed: event.payload.indexed,
+          skipped: event.payload.skipped ?? 0,
+          removed: event.payload.removed ?? 0,
+          workspaceId: event.payload.workspaceId,
+        });
+      }).then((unlisten) => {
+        unlistenComplete = unlisten;
+      }),
+    );
+  }
 
   return () => {
     if (timer) clearTimeout(timer);
+    if (startupTimer) clearTimeout(startupTimer);
+    unlistenComplete?.();
     for (const unsub of unsubs) unsub();
   };
 }

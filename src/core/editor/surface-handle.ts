@@ -1,5 +1,4 @@
 import type { ContentPatch, CursorAnchor, EditorSurfaceMode, ScrollAnchor } from "../document/types";
-import type { DocumentId } from "../events";
 
 /** Runtime binding registered by an active editor surface (React mount). */
 export interface LiveSurfaceHandle {
@@ -18,9 +17,10 @@ export interface LiveSurfaceHandle {
   }): void;
 }
 
+/** Unique per tab slot — split panes may share one documentId. */
 export function surfaceRegistrationKey(
-  documentId: DocumentId,
+  tabId: string,
   mode: EditorSurfaceMode,
 ): string {
-  return `${documentId}:${mode}`;
+  return `${tabId}:${mode}`;
 }

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { detectLanguageFromExtension } from "@/lib/language-registry";
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
@@ -25,35 +26,10 @@ export function fileExt(name: string): string {
 
 export function detectLanguageFromName(name: string): string {
   const ext = fileExt(name);
-  return (
-    {
-      md: "markdown",
-      markdown: "markdown",
-      json: "json",
-      yaml: "yaml",
-      yml: "yaml",
-      ts: "typescript",
-      tsx: "typescript",
-      js: "javascript",
-      jsx: "javascript",
-      py: "python",
-      rs: "rust",
-      go: "go",
-      java: "java",
-      c: "cpp",
-      cpp: "cpp",
-      h: "cpp",
-      html: "html",
-      htm: "html",
-      css: "css",
-      sh: "shell",
-      bash: "shell",
-      sql: "sql",
-      xml: "xml",
-      toml: "toml",
-    }[ext] || "plaintext"
-  );
+  return detectLanguageFromExtension(ext);
 }
+
+export { detectLanguageFromExtension } from "@/lib/language-registry";
 
 export function languageIcon(language: string): string {
   return (

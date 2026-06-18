@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/command_system
+title: 命令系统与快捷键管理
+scope:
+    - src/core/command/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/shell_and_dialogs
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: frontend_app/shared_ui_and_utils
+    - path: frontend_app/core_infrastructure/editor_host
+    - path: frontend_app/navigation_and_panels
+    - path: frontend_app/core_infrastructure/vault_service
+    - path: docs_design
+    - path: backend_tauri/ai_knowledge
+    - path: backend_tauri/search_memory_scratch

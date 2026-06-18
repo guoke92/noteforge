@@ -21,7 +21,7 @@ export interface LayoutState {
   sidebarWidth: number;
   rightPanelOpen: boolean;
   rightPanelWidth: number;
-  rightPanelMode: "outline" | "backlinks" | "properties" | "graph" | "ai";
+  rightPanelMode: "outline" | "backlinks" | "properties" | "graph" | "ai" | "history";
 }
 
 export interface PersistedEphemeralSnapshot {

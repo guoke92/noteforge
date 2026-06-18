@@ -1,3 +1,8 @@
+/** Stat-only revision for huge lazy-open (no content hash). */
+export function buildStatRevision(mtime: string, byteSize: number): string {
+  return `${mtime}:${byteSize}`;
+}
+
 /** Lightweight revision token for conflict detection (Phase 0). */
 export function buildDiskRevision(content: string, modified?: string): string {
   let hash = 0;

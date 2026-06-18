@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Check, Loader2 } from "lucide-react";
 import {
   STARTUP_STEP_LABELS,
@@ -40,16 +41,17 @@ function StepRow({ step, done, active }: { step: StartupStep; done: boolean; act
 }
 
 export function AppSplashScreen() {
-  const fading = useStartupStore((s) => s.fading);
   const stepsDone = useStartupStore((s) => s.stepsDone);
   const activeStep = useStartupStore((s) => s.activeStep);
   const progress = startupProgress(stepsDone);
 
+  useEffect(() => {
+    document.getElementById("static-boot-splash")?.remove();
+  }, []);
+
   return (
     <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center transition-opacity duration-300 ease-out ${
-        fading ? "pointer-events-none opacity-0" : "opacity-100"
-      }`}
+      className="fixed inset-0 z-[200] flex items-center justify-center"
       role="status"
       aria-live="polite"
       aria-label="NoteForge 正在启动"

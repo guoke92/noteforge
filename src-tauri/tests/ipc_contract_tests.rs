@@ -172,12 +172,12 @@ fn contract_note_upsert_updates_existing() {
 
     let note_id = uuid::Uuid::new_v4().to_string();
     note_repo
-        .upsert(&note_id, &ws_id, "readme.md", Some("Readme"), Some("v1"), Some("markdown"))
+        .upsert(&note_id, &ws_id, "readme.md", Some("Readme"), Some("v1"), Some("markdown"), 0, 0)
         .unwrap();
 
     // Upsert again with same workspace+path
     note_repo
-        .upsert(&note_id, &ws_id, "readme.md", Some("Readme"), Some("v2"), Some("markdown"))
+        .upsert(&note_id, &ws_id, "readme.md", Some("Readme"), Some("v2"), Some("markdown"), 0, 0)
         .unwrap();
 
     let note = note_repo
@@ -204,6 +204,8 @@ fn contract_note_list_by_workspace() {
                 Some(&format!("Note {}", i)),
                 Some(&format!("Content {}", i)),
                 Some("markdown"),
+                0,
+                0,
             )
             .unwrap();
     }
@@ -246,6 +248,8 @@ fn contract_tag_counts_for_workspace() {
                 None,
                 None,
                 None,
+                0,
+                0,
             )
             .unwrap();
 
@@ -301,7 +305,7 @@ fn contract_pipeline_index_creates_all_artifacts() {
     let content = "---\ntags:\n  - rust\n  - tutorial\n---\n# Rust Basics\n\nThis is a [[guide]] about Rust.\n\nSee [this link](other.md) for more.";
 
     pipeline
-        .index_document(&ws_id, "rust-basics.md", "Rust Basics", content)
+        .index_document(&ws_id, "rust-basics.md", "Rust Basics", content, 0, 0)
         .unwrap();
 
     // Verify note was created
@@ -337,7 +341,7 @@ fn contract_pipeline_remove_cleans_all() {
     let pipeline = IndexPipeline::new(&conn);
 
     pipeline
-        .index_document(&ws_id, "test.md", "Test", "Some content")
+        .index_document(&ws_id, "test.md", "Test", "Some content", 0, 0)
         .unwrap();
 
     pipeline.remove_document(&ws_id, "test.md").unwrap();
@@ -373,10 +377,10 @@ fn contract_search_fulltext_workspace_filtered() {
     // Index docs in different workspaces
     let pipeline = IndexPipeline::new(&conn);
     pipeline
-        .index_document(&ws1, "a.md", "Doc A", "Rust programming language")
+        .index_document(&ws1, "a.md", "Doc A", "Rust programming language", 0, 0)
         .unwrap();
     pipeline
-        .index_document(&ws2_id, "b.md", "Doc B", "Python programming language")
+        .index_document(&ws2_id, "b.md", "Doc B", "Python programming language", 0, 0)
         .unwrap();
 
     // Search within ws1 should only find a.md
@@ -412,10 +416,10 @@ fn contract_graph_nodes_and_edges() {
 
     let pipeline = IndexPipeline::new(&conn);
     pipeline
-        .index_document(&ws_id, "a.md", "A", content)
+        .index_document(&ws_id, "a.md", "A", content, 0, 0)
         .unwrap();
     pipeline
-        .index_document(&ws_id, "b.md", "B", "Content B")
+        .index_document(&ws_id, "b.md", "B", "Content B", 0, 0)
         .unwrap();
 
     // Debug: check links table

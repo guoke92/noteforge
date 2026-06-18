@@ -87,6 +87,10 @@ export interface WorkspaceDraftPayload {
   vaultPath: string;
   content: string;
   language: string;
+  /** Disk mtime when draft was saved (for O(1) change detection). */
+  diskMtime?: string;
+  /** Disk size when draft was saved (for O(1) change detection). */
+  diskSize?: number;
 }
 
 export interface ScratchSessionTab {

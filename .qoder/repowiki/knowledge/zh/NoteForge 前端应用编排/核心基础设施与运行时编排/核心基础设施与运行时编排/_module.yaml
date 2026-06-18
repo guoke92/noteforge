@@ -1,0 +1,28 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/core_utilities
+title: 核心基础设施与运行时编排
+scope:
+    - src/core/note/
+    - src/core/platform/
+    - src/core/session/
+    - src/core/knowledge/
+    - src/core/events.ts
+    - src/core/invariants.ts
+    - src/core/runtime.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/shared_ui_and_utils
+    - path: frontend_app/core_infrastructure/workbench
+    - path: frontend_app/core_infrastructure/command_system
+    - path: frontend_app/shell_and_dialogs
+    - path: frontend_app/core_infrastructure/dialog_system
+    - path: frontend_app/core_infrastructure/vault_service
+    - path: frontend_app/core_infrastructure/document_management
+    - path: frontend_app/core_infrastructure/editor_host
+    - path: frontend_app/navigation_and_panels
+    - path: backend_tauri/config_encryption_core
+    - path: frontend_app/editor_feature
+    - path: backend_tauri/ai_knowledge
+    - path: backend_tauri/search_memory_scratch
+    - path: backend_tauri/session_draft_vault

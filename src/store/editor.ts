@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import { scratch, fs } from "@/ipc";
 import { basename, detectLanguageFromName } from "@/lib/utils";
-import { detectLanguageFromContent, isMarkdownTab } from "@/lib/editor-doc";
-import {
-  isScratchTab,
-  nextUntitledDisplayName,
-  normalizeScratchDisplayNames,
-} from "@/lib/editor-doc";
+import { detectLanguageFromContent, isMarkdownTab, isScratchTab } from "@/lib/editor-doc";
 import {
   openConfirmCloseDialog,
   openSaveAsDialog,
@@ -15,8 +10,15 @@ import {
 } from "@/core/dialog/dialog-api";
 import { useWorkspaceStore } from "@/store/workspace";
 import { promptSaveScratchTab } from "@/lib/save-dialog";
-import { getCore, openDocumentInPane, createUntitledInPane, saveDocument, flushCoreBeforeExit, scheduleWorkspacePersist } from "@/core/runtime";
-import { syncDocumentToEditorTabs } from "@/core/bridge/editor-sync";
+import { getCore, openDocumentInPane, createUntitledInPane, saveDocument, scheduleWorkspacePersist } from "@/core/runtime";
+import { syncDocumentToEditorTabs, pushContentToSurface } from "@/core/bridge/editor-sync";
+import { newTabSlotId } from "@/core/bridge/tab-id";
+import {
+  MAIN_PANE_ID,
+  remapActiveTabsAfterClose,
+  resolveActiveTabAfterClose,
+} from "@/core/bridge/tab-pane-utils";
+import { runExitFlushPipeline } from "@/core/session/exit-pipeline";
 import {
   scheduleScratchAutosave,
   ensureScratchFlushed,
@@ -26,8 +28,9 @@ import {
 import { captureAllOpenTabViewStates, deactivateTab } from "@/core/session/tab-lifecycle";
 import { wireEditorStoreHost } from "@/core/bridge/editor-store-bridge";
 import type { EditorSurfaceMode } from "@/core/document/types";
+import type { PersistedTabRef } from "@/core/workbench/types";
 import { normalizeSurfaceMode } from "@/core/workbench/types";
-import { resolveSurfaceMode } from "@/lib/surface-mode";
+import { resolveSurfaceMode, nextSurfaceMode } from "@/lib/surface-mode";
 import type { EditorCaretStatus } from "@/lib/editor-caret-status";
 
 export type EditorTabKind = "scratch" | "workspace";
@@ -35,7 +38,10 @@ export type EditorTabKind = "scratch" | "workspace";
 export type SurfaceMode = EditorSurfaceMode;
 
 export interface EditorTab {
+  /** Unique tab slot id (per pane). */
   id: string;
+  /** Canonical DocumentRecord id — shared across split views of the same file. */
+  documentId: string;
   kind: EditorTabKind;
   /** Stable id for scratch persistence */
   scratchId?: string;
@@ -44,9 +50,10 @@ export interface EditorTab {
   /** Tab title (Untitled-1 or file name) */
   displayName: string;
   language: string;
-  content: string;
-  /** Last persisted snapshot (disk or scratch buffer) */
-  baseline: string;
+  /** Current edit revision (incremented by DocumentService). */
+  bufferRevision: number;
+  /** Revision at last save/revert/open. Dirty = bufferRevision !== savedRevision. */
+  savedRevision: number;
   paneId: string;
   surfaceMode?: SurfaceMode;
   /** JSON/YAML tree panel follows editor cursor (default true). */
@@ -55,9 +62,11 @@ export interface EditorTab {
   openedInSplit?: boolean;
   /** Original index among main-pane tabs when moved from main to a split. */
   mainPaneOrder?: number;
+  /** Session restore placeholder — hydrated on first activation. */
+  pendingRestore?: PersistedTabRef;
 }
 
-export const MAIN_PANE_ID = "pane-1";
+export { MAIN_PANE_ID } from "@/core/bridge/tab-pane-utils";
 
 export function isMainPane(paneId: string, panes: string[]): boolean {
   return panes.length > 0 && panes[0] === paneId;
@@ -113,14 +122,6 @@ interface EditorState {
   requestRevealLine: (tabId: string, line: number) => void;
   consumeRevealLine: () => void;
   reportCaretStatus: (tabId: string, status: EditorCaretStatus) => void;
-}
-
-function tabId(): string {
-  return "tab-" + Math.random().toString(36).slice(2, 11);
-}
-
-function scratchId(): string {
-  return "scratch-" + Math.random().toString(36).slice(2, 11);
 }
 
 let saveTabInFlight = false;
@@ -192,10 +193,11 @@ async function processCloseTabQueue() {
 }
 
 function scheduleSessionPersist() {
-  scheduleWorkspacePersist();
+  scheduleWorkspacePersist("layout");
 }
 
 function isSameDocument(a: EditorTab, b: EditorTab): boolean {
+  if (a.documentId === b.documentId) return true;
   if (a.id === b.id) return true;
   if (a.kind === "scratch" && b.kind === "scratch" && a.scratchId && b.scratchId) {
     return a.scratchId === b.scratchId;
@@ -207,12 +209,12 @@ function isSameDocument(a: EditorTab, b: EditorTab): boolean {
 }
 
 function duplicateTab(source: EditorTab, targetPaneId: string, panes: string[]): EditorTab {
-  const toMain = isMainPane(targetPaneId, panes);
   return {
     ...source,
-    id: tabId(),
+    id: newTabSlotId(),
+    documentId: source.documentId,
     paneId: targetPaneId,
-    openedInSplit: !toMain,
+    openedInSplit: !isMainPane(targetPaneId, panes),
     mainPaneOrder: undefined,
   };
 }
@@ -290,10 +292,10 @@ function finalizeClosePane(
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
-  panes: ["pane-1"],
+  panes: [MAIN_PANE_ID],
   tabs: [],
   activeTabIdByPane: {},
-  activePaneId: "pane-1",
+  activePaneId: MAIN_PANE_ID,
   sessionRestored: false,
   revealLineRequest: null,
   caretStatusByTab: {},
@@ -378,18 +380,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return;
     }
 
-    if (getCore().document.get(id)) {
-      await getCore().document.close(id, { force: true });
-      closeDialog();
-      void get().persistEditorSession();
-      if (closeTabQueue[0] === id) {
-        closeTabQueue.shift();
+    const docId = tab.documentId;
+    if (getCore().document.get(docId)) {
+      const stillOpen = get().tabs.some((t) => t.documentId === docId && t.id !== id);
+      if (!stillOpen) {
+        await getCore().document.close(docId, { force: true });
       }
-      void processCloseTabQueue();
-      return;
-    }
-
-    if (tab.kind === "scratch" && tab.scratchId) {
+    } else if (tab.kind === "scratch" && tab.scratchId) {
       await ensureScratchFlushed(tab.scratchId);
       const stillOpen = get().tabs.some(
         (t) => t.id !== id && t.scratchId === tab.scratchId,
@@ -404,14 +401,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
 
     const tabs = get().tabs.filter((t) => t.id !== id);
-    const map = { ...get().activeTabIdByPane };
-    for (const pane of get().panes) {
-      if (map[pane] === id) {
-        const remaining = tabs.filter((t) => t.paneId === pane);
-        map[pane] = remaining.length ? remaining[remaining.length - 1]!.id : undefined;
-      }
-    }
-    set({ tabs, activeTabIdByPane: map });
+    set({
+      tabs,
+      activeTabIdByPane: remapActiveTabsAfterClose(tabs, get().activeTabIdByPane, id),
+    });
     closeDialog();
     void get().persistEditorSession();
     if (closeTabQueue[0] === id) {
@@ -422,15 +415,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   async flushBeforeExit() {
     if (!get().sessionRestored) return;
-    cancelPendingScratchAutosave();
-    const { cancelPendingWorkspaceDraftAutosave } = await import(
-      "@/core/session/workspace-draft-autosave"
-    );
-    cancelPendingWorkspaceDraftAutosave();
-    captureAllOpenTabViewStates();
-    await flushCoreBeforeExit();
-    await flushAllDirtyScratchBuffers();
-    await get().persistEditorSession();
+    await runExitFlushPipeline(() => get().persistEditorSession());
   },
 
   isAppExitInProgress() {
@@ -438,33 +423,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   async requestAppExit() {
-    captureAllOpenTabViewStates();
-    cancelPendingScratchAutosave();
-    const { cancelPendingWorkspaceDraftAutosave } = await import(
-      "@/core/session/workspace-draft-autosave"
-    );
-    cancelPendingWorkspaceDraftAutosave();
-    await flushCoreBeforeExit();
-    await flushAllDirtyScratchBuffers();
-    await get().persistEditorSession();
+    await runExitFlushPipeline(() => get().persistEditorSession());
     return true;
   },
 
   async revertTabChanges(id: string) {
-    const doc = getCore().document.get(id);
-    if (doc) {
-      await getCore().document.revert(id);
-      const next = getCore().document.get(id);
-      if (next) syncDocumentToEditorTabs(next);
-      return;
-    }
     const tab = get().tabs.find((t) => t.id === id);
-    if (!tab) return;
-    set({
-      tabs: get().tabs.map((t) =>
-        t.id === id ? { ...t, content: t.baseline } : t,
-      ),
-    });
+    const docId = tab?.documentId ?? id;
+    const doc = getCore().document.get(docId);
+    if (!doc) return;
+    await getCore().document.revert(docId);
+    const next = getCore().document.get(docId);
+    if (next) {
+      syncDocumentToEditorTabs(next);
+      pushContentToSurface(next);
+    }
   },
 
   advanceAppExitQueue() {
@@ -499,37 +472,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     scheduleSessionPersist();
   },
 
-  updateContent(id: string, content: string) {
-    const coreDoc = getCore().document.get(id);
+  updateContent(tabId: string, content: string) {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    const coreDoc = tab ? getCore().document.get(tab.documentId) : null;
     if (coreDoc) {
-      getCore().document.applyPatch(id, { kind: "replace-all", content });
+      getCore().document.applyPatch(tab!.documentId, { kind: "replace-all", content });
       return;
     }
-
-    const source = get().tabs.find((t) => t.id === id);
-    if (!source) return;
-
-    set({
-      tabs: get().tabs.map((t) => {
-        if (!isSameDocument(source, t)) return t;
-        const language =
-          t.kind === "scratch"
-            ? detectLanguageFromContent(content) ?? "plaintext"
-            : t.language;
-        const next = { ...t, content, language };
-        if (!isMarkdownTab(next)) {
-          return { ...next, surfaceMode: "source" as const };
-        }
-        return next;
-      }),
-    });
-    if (source.kind === "scratch" && source.scratchId) {
-      const updated = get().tabs.find((t) => t.scratchId === source.scratchId);
-      if (updated && isDirty(updated)) {
-        scheduleScratchAutosave(source.scratchId);
-      }
-    }
-    scheduleSessionPersist();
+    console.warn("updateContent: no DocumentRecord found for tab", tabId);
   },
 
   async saveTab(id?: string) {
@@ -539,18 +489,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const targetId = id || get().activeTabIdByPane[get().activePaneId];
       if (!targetId) return;
 
-      if (getCore().document.get(targetId)) {
-        await saveDocument(targetId);
+      const targetTab = get().tabs.find((t) => t.id === targetId);
+      if (!targetTab) return;
+
+      if (getCore().document.get(targetTab.documentId)) {
+        await saveDocument(targetTab.documentId);
         return;
       }
 
-      const tab = get().tabs.find((t) => t.id === targetId);
-      if (!tab) return;
-
-      if (tab.kind === "scratch") {
+      if (targetTab.kind === "scratch") {
         const wsPath = useWorkspaceStore.getState().current?.path;
         await promptSaveScratchTab(
-          tab.id,
+          targetTab.id,
           wsPath,
           (tid, path) => get().saveTabAs(tid, path),
           (tid) => openSaveAsDialog(tid),
@@ -558,12 +508,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         return;
       }
 
-      await fs.write(tab.path, tab.content);
-      set({
-        tabs: get().tabs.map((t) =>
-          isSameDocument(tab, t) ? { ...t, baseline: tab.content } : t,
-        ),
-      });
+      const content = getCore().document.get(targetTab.documentId)?.content ?? "";
+      await fs.write(targetTab.path, content);
     } finally {
       saveTabInFlight = false;
     }
@@ -573,10 +519,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
 
+    const core = getCore();
+    core.editorHost.flushAllSurfacesForDocument(tab.documentId);
+
+    const content = core.document.get(tab.documentId)?.content ?? "";
+
     try {
-      await fs.create(targetPath, tab.content);
+      await fs.create(targetPath, content);
     } catch {
-      await fs.write(targetPath, tab.content);
+      await fs.write(targetPath, content);
     }
 
     if (tab.kind === "scratch" && tab.scratchId) {
@@ -584,13 +535,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       await scratch.deleteBuffer(tab.scratchId);
     }
 
+    // Update DocumentService record: vaultPath, savedRevision, baseline, lifecycle
+    await core.document.saveAs(tab.documentId, targetPath);
+    syncDocumentToEditorTabs(core.document.get(tab.documentId)!);
+
     const name = basename(targetPath);
     const lang =
-      detectLanguageFromContent(tab.content) || detectLanguageFromName(name) || tab.language;
+      detectLanguageFromContent(content) || detectLanguageFromName(name) || tab.language;
     const isMd = isMarkdownTab({
       kind: "workspace",
       path: targetPath,
-      content: tab.content,
+      language: lang,
     });
 
     set({
@@ -603,7 +558,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               path: targetPath,
               displayName: name,
               language: lang,
-              baseline: tab.content,
               surfaceMode: isMd ? t.surfaceMode || "write" : "source",
             }
           : t,
@@ -627,9 +581,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cycleSurfaceMode(id) {
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
-    const order: SurfaceMode[] = ["write", "read", "source"];
-    const curr = resolveSurfaceMode(tab);
-    const nextMode = order[(order.indexOf(curr) + 1) % order.length]!;
+    const nextMode = nextSurfaceMode(resolveSurfaceMode(tab));
     void getCore().editorHost.setMode(id, nextMode);
   },
 
@@ -713,7 +665,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return;
     }
 
-    let tabs = get().tabs.filter((t) => t.id !== tabId);
+    const tabs = get().tabs.filter((t) => t.id !== tabId);
     const updated: EditorTab = {
       ...tab,
       paneId: mainPaneId,
@@ -725,8 +677,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const map = { ...get().activeTabIdByPane };
     if (map[tab.paneId] === tabId) {
-      const remaining = tabs.filter((t) => t.paneId === tab.paneId);
-      map[tab.paneId] = remaining.length ? remaining[remaining.length - 1]!.id : undefined;
+      map[tab.paneId] = resolveActiveTabAfterClose(tabs, tab.paneId, tabId);
     }
     map[mainPaneId] = tabId;
 
@@ -831,31 +782,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     scheduleSessionPersist();
   },
 
-  async ensureFreshFromDisk(path) {
+  async ensureFreshFromDisk(path: string) {
     const coreDoc = getCore().document.list().find((d) => d.vaultPath === path);
     if (coreDoc) {
       await getCore().document.notifyExternalChange(path);
       const refreshed = getCore().document.get(coreDoc.id);
-      if (refreshed) syncDocumentToEditorTabs(refreshed);
+      if (refreshed) {
+        syncDocumentToEditorTabs(refreshed);
+        pushContentToSurface(refreshed);
+      }
       return;
-    }
-
-    const openTabs = get().tabs.filter((t) => t.path === path && t.kind === "workspace");
-    if (openTabs.length === 0) return;
-    if (openTabs.some((t) => t.content !== t.baseline)) return;
-    try {
-      const { content } = await fs.read(path);
-      const stale = openTabs.some((t) => t.content !== content);
-      if (!stale) return;
-      set({
-        tabs: get().tabs.map((t) =>
-          t.path === path && t.kind === "workspace"
-            ? { ...t, content, baseline: content }
-            : t,
-        ),
-      });
-    } catch (e) {
-      console.error("ensureFreshFromDisk failed", path, e);
     }
   },
 
@@ -877,10 +813,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 }));
 
-wireEditorStoreHost(() => useEditorStore.getState());
+wireEditorStoreHost(() => {
+  const s = useEditorStore.getState();
+  return {
+    tabs: s.tabs,
+    activePaneId: s.activePaneId,
+    activeTabIdByPane: s.activeTabIdByPane,
+    applySurfaceMode: s.applySurfaceMode,
+  };
+});
 
 export function isDirty(tab: EditorTab): boolean {
-  return tab.content !== tab.baseline;
+  return tab.bufferRevision !== tab.savedRevision;
 }
 
 /** Scratch tab not yet saved into workspace */

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use crate::error::NoteforgeError;
-use crate::models::{FileEntry, ReadFileResponse};
+use crate::models::{FileEntry, ReadFileResponse, FileStat, FileRangeResponse};
 
 pub fn ensure_real_file_path(path: &str) -> Result<PathBuf, NoteforgeError> {
     if path.contains("://") || path.starts_with("untitled:") {
@@ -171,4 +171,94 @@ fn detect_language_from_path(path: &Path) -> String {
         Some("txt") => "text".to_string(),
         _ => "text".to_string(),
     }
+}
+
+#[tauri::command]
+pub fn file_stat(path: String) -> Result<FileStat, NoteforgeError> {
+    let path = ensure_real_file_path(&path)?;
+    let path = path.as_path();
+    if !path.exists() {
+        return Err(NoteforgeError::NotFound("File not found".to_string()));
+    }
+
+    let metadata = std::fs::metadata(path).map_err(NoteforgeError::Io)?;
+    let size = metadata.len();
+    let mtime = metadata
+        .modified()
+        .map(|t| {
+            let datetime: chrono::DateTime<chrono::Utc> = t.into();
+            datetime.to_rfc3339()
+        })
+        .unwrap_or_default();
+
+    // Estimate line count by sampling first 64KB
+    let line_count_estimate = estimate_line_count(path, size);
+
+    Ok(FileStat {
+        size,
+        mtime,
+        line_count_estimate,
+    })
+}
+
+#[tauri::command]
+pub fn read_file_range(path: String, offset: u64, length: u64) -> Result<FileRangeResponse, NoteforgeError> {
+    let path = ensure_real_file_path(&path)?;
+    let path = path.as_path();
+    if !path.exists() {
+        return Err(NoteforgeError::NotFound("File not found".to_string()));
+    }
+
+    use std::io::{Read, Seek, SeekFrom};
+    let metadata = std::fs::metadata(path).map_err(NoteforgeError::Io)?;
+    let total_size = metadata.len();
+
+    let mut file = std::fs::File::open(path).map_err(NoteforgeError::Io)?;
+    file.seek(SeekFrom::Start(offset)).map_err(NoteforgeError::Io)?;
+
+    let read_len = std::cmp::min(length, total_size.saturating_sub(offset));
+    let mut buf = vec![0u8; read_len as usize];
+    file.read_exact(&mut buf).map_err(NoteforgeError::Io)?;
+
+    // Ensure we don't split a multi-byte UTF-8 character
+    let content = String::from_utf8_lossy(&buf).to_string();
+    let truncated = offset + length < total_size;
+
+    Ok(FileRangeResponse {
+        content,
+        total_size,
+        truncated,
+    })
+}
+
+/// Estimate total line count by sampling the first 64KB of the file.
+fn estimate_line_count(path: &Path, file_size: u64) -> u64 {
+    use std::io::{Read, Seek, SeekFrom};
+    const SAMPLE_SIZE: u64 = 64 * 1024;
+
+    let sample_len = std::cmp::min(SAMPLE_SIZE, file_size);
+    if sample_len == 0 {
+        return 0;
+    }
+
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return 0,
+    };
+    if file.seek(SeekFrom::Start(0)).is_err() {
+        return 0;
+    }
+    let mut buf = vec![0u8; sample_len as usize];
+    if file.read_exact(&mut buf).is_err() {
+        return 0;
+    }
+
+    let newlines_in_sample = buf.iter().filter(|&&b| b == b'\n').count() as u64;
+    if sample_len >= file_size {
+        // We read the whole file
+        return newlines_in_sample + 1;
+    }
+    // Extrapolate
+    let ratio = file_size as f64 / sample_len as f64;
+    ((newlines_in_sample as f64 * ratio).ceil() as u64) + 1
 }

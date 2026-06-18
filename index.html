@@ -12,10 +12,20 @@
           var dark =
             m === "dark" ||
             (m !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var bg = dark ? "#0d1117" : "#ffffff";
+          var fg = dark ? "#e6edf3" : "#1f2328";
+          var accent = dark ? "#58a6ff" : "#0969da";
           var root = document.documentElement;
           root.classList.add(dark ? "dark" : "light");
           root.style.colorScheme = dark ? "dark" : "light";
-          root.style.backgroundColor = dark ? "#0d1117" : "#ffffff";
+          root.style.backgroundColor = bg;
+          var splash = document.getElementById("static-boot-splash");
+          if (splash) {
+            splash.style.background = bg;
+            splash.style.color = fg;
+            var logo = splash.querySelector("[data-boot-logo]");
+            if (logo) logo.style.background = accent;
+          }
         } catch (e) {}
       })();
     </script>
@@ -37,7 +47,42 @@
     </style>
   </head>
   <body class="font-sans antialiased">
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="static-boot-splash"
+        style="
+          position: fixed;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #0d1117;
+          color: #e6edf3;
+          font-family: system-ui, -apple-system, sans-serif;
+        "
+        aria-hidden="true"
+      >
+        <div
+          data-boot-logo
+          style="
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: #0969da;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+          "
+        >
+          N
+        </div>
+        <div style="margin-top: 24px; font-size: 22px; font-weight: 600">NoteForge</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

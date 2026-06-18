@@ -1,0 +1,23 @@
+schema_version: 1
+module_path: frontend_app/shared_ui_and_utils
+title: 前端共享 UI 组件与基础设施
+scope:
+    - src/components/ui/
+    - src/hooks/
+    - src/store/
+    - src/lib/
+    - src/ipc/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_tauri/config_encryption_core
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: docs_design
+    - path: frontend_app/navigation_and_panels
+    - path: frontend_app/core_infrastructure/command_system
+    - path: frontend_app/shell_and_dialogs
+    - path: frontend_app/core_infrastructure/editor_host
+    - path: frontend_app/core_infrastructure/workbench
+    - path: frontend_app/core_infrastructure/dialog_system
+    - path: backend_tauri/search_memory_scratch
+    - path: backend_tauri/ai_knowledge

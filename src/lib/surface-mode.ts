@@ -24,3 +24,11 @@ export function surfaceModeLabel(mode: SurfaceMode): string {
 export function isReadOnlySurface(mode: SurfaceMode): boolean {
   return mode === "read";
 }
+
+/** Order used when cycling write → read → source (TabBar / keyboard). */
+export const SURFACE_MODE_CYCLE_ORDER: readonly SurfaceMode[] = ["write", "read", "source"];
+
+export function nextSurfaceMode(current: SurfaceMode): SurfaceMode {
+  const idx = SURFACE_MODE_CYCLE_ORDER.indexOf(current);
+  return SURFACE_MODE_CYCLE_ORDER[(idx + 1) % SURFACE_MODE_CYCLE_ORDER.length]!;
+}

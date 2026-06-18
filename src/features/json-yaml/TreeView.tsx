@@ -3,14 +3,18 @@ import { ChevronDown, ChevronRight, Link2, Link2Off } from "lucide-react";
 import yaml from "js-yaml";
 import { editor as editorApi } from "@/ipc";
 import { Button } from "@/components/ui/Button";
+import { LargeFileFeatureNotice } from "@/components/editor/LargeFileFeatureNotice";
+import type { FileTier } from "@/core/document/file-tier";
 import type { JsonPath } from "@/lib/json-location";
 import { isAncestorPath, pathsEqual } from "@/lib/json-location";
+import { useLargeFileOverrides } from "@/store/large-file-overrides";
 
 interface Props {
+  documentId: string;
+  tier: FileTier;
   content: string;
   language: "json" | "yaml";
   onFormat?: (formatted: string) => void;
-  /** Path at editor cursor when sync is enabled. */
   activePath?: JsonPath | null;
   syncLinked?: boolean;
   onToggleSync?: () => void;
@@ -65,8 +69,7 @@ function Node({
     syncLinked && activePath !== null && isAncestorPath(pathPrefix, activePath);
 
   const defaultExpanded = depth < 2;
-  const expanded =
-    onActivePath || (manualExpanded[pathKey] ?? defaultExpanded);
+  const expanded = onActivePath || (manualExpanded[pathKey] ?? defaultExpanded);
 
   const isObject = value !== null && typeof value === "object";
   const isArray = Array.isArray(value);
@@ -188,7 +191,13 @@ interface Diagnostic {
   severity: "error" | "warning";
 }
 
+type ParseResult =
+  | { kind: "ok"; value: JsonValue }
+  | { kind: "error"; errors: Diagnostic[] };
+
 export function TreeView({
+  documentId,
+  tier,
   content,
   language,
   onFormat,
@@ -200,31 +209,33 @@ export function TreeView({
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean | undefined>>({});
   const activeNodeRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const treeEnabled = useLargeFileOverrides((s) => s.isEnabled(documentId, tier, "jsonTree"));
+  const byteSize = useMemo(() => new TextEncoder().encode(content).length, [content]);
 
-  const parsed = useMemo(() => {
+  const parsed = useMemo((): ParseResult | null => {
+    if (!treeEnabled) return null;
     try {
       if (language === "json") {
-        return { ok: true as const, value: JSON.parse(content) as JsonValue, errors: [] };
+        return { kind: "ok", value: JSON.parse(content) as JsonValue };
       }
       const doc = yaml.load(content) as JsonValue;
-      return { ok: true as const, value: doc, errors: [] as Diagnostic[] };
+      return { kind: "ok", value: doc };
     } catch (e: unknown) {
       const message = String((e as Error)?.message || e || "Parse error");
       let line = 1;
       const lineMatch = message.match(/line (\d+)/i);
       if (lineMatch) line = Number(lineMatch[1]);
       return {
-        ok: false as const,
-        value: null,
-        errors: [{ line, message, severity: "error" } as Diagnostic],
+        kind: "error",
+        errors: [{ line, message, severity: "error" }],
       };
     }
-  }, [content, language]);
+  }, [content, language, treeEnabled]);
 
   useEffect(() => {
-    if (!syncLinked || !activePath?.length) return;
+    if (!syncLinked || !activePath?.length || !parsed || parsed.kind !== "ok") return;
     activeNodeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [activePath, syncLinked, content]);
+  }, [activePath, syncLinked, parsed]);
 
   async function format() {
     try {
@@ -237,7 +248,7 @@ export function TreeView({
         onFormat?.(formatted);
       }
     } catch (e) {
-      console.error(e);
+      console.error("format failed", e);
     }
   }
 
@@ -249,8 +260,8 @@ export function TreeView({
         const doc = yaml.load(content);
         onFormat?.(yaml.dump(doc, { flowLevel: 0, indent: 0 }).replace(/\n/g, " "));
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.error("minify failed", e);
     }
   }
 
@@ -277,7 +288,7 @@ export function TreeView({
               {syncLinked ? <Link2 size={13} /> : <Link2Off size={13} />}
             </button>
           )}
-          <Button size="sm" variant="ghost" onClick={format}>
+          <Button size="sm" variant="ghost" onClick={() => void format()}>
             格式化
           </Button>
           <Button size="sm" variant="ghost" onClick={minify}>
@@ -287,35 +298,43 @@ export function TreeView({
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
-        {parsed.ok ? (
-          parsed.value !== undefined && parsed.value !== null ? (
-            <Node
-              value={parsed.value}
-              depth={0}
-              name="(root)"
-              pathPrefix={[]}
-              activePath={activePath}
-              syncLinked={syncLinked}
-              manualExpanded={manualExpanded}
-              onToggleExpand={onToggleExpand}
-              onPathSelect={onPathSelect}
-              activeNodeRef={activeNodeRef}
-            />
-          ) : (
-            <div className="px-3 py-2 text-xs text-text-tertiary">文档为空</div>
-          )
-        ) : (
-          <div className="px-3 py-2 text-xs text-danger">
-            {parsed.errors.map((err, i) => (
-              <div key={i}>
-                第 {err.line} 行: {err.message}
-              </div>
-            ))}
-          </div>
-        )}
+        <LargeFileFeatureNotice
+          documentId={documentId}
+          tier={tier}
+          feature="jsonTree"
+          byteSize={byteSize}
+          compact
+        >
+          {parsed?.kind === "ok" ? (
+            parsed.value !== undefined && parsed.value !== null ? (
+              <Node
+                value={parsed.value}
+                depth={0}
+                name="(root)"
+                pathPrefix={[]}
+                activePath={activePath}
+                syncLinked={syncLinked}
+                manualExpanded={manualExpanded}
+                onToggleExpand={onToggleExpand}
+                onPathSelect={onPathSelect}
+                activeNodeRef={activeNodeRef}
+              />
+            ) : (
+              <div className="px-3 py-2 text-xs text-text-tertiary">文档为空</div>
+            )
+          ) : parsed?.kind === "error" ? (
+            <div className="px-3 py-2 text-xs text-danger">
+              {parsed.errors.map((err, i) => (
+                <div key={i}>
+                  第 {err.line} 行: {err.message}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </LargeFileFeatureNotice>
       </div>
 
-      {!parsed.ok && (
+      {parsed?.kind === "error" && treeEnabled && (
         <div className="shrink-0 border-t border-border bg-bg-secondary px-2 py-1.5 text-xs">
           <div className="font-medium text-danger">⚠ Schema 校验: {parsed.errors.length} 问题</div>
           {parsed.errors.map((err, i) => (

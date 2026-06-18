@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { ai } from "@/ipc";
 import type { ModelInfo } from "@/types";
+import { perfAsync, perfLog } from "@/lib/startup-perf";
 
 export interface AIPanelState {
   open: boolean;
@@ -34,6 +35,7 @@ export const useAIStore = create<AIPanelState>((set, get) => ({
   status: "no-model",
 
   async loadModels() {
+    return perfAsync("ai.loadModels", async () => {
     try {
       const [local, cloud] = await Promise.all([ai.listModels("local"), ai.listModels("cloud")]);
       const all = [...local, ...cloud];
@@ -43,9 +45,12 @@ export const useAIStore = create<AIPanelState>((set, get) => ({
         selectedModel: available?.id,
         status: available ? "ready" : "no-model",
       });
+      perfLog("ai.loadModels.done", { count: all.length, status: available ? "ready" : "no-model" });
     } catch {
       set({ models: [], status: "offline" });
+      perfLog("ai.loadModels.offline");
     }
+    });
   },
 
   selectModel(id) {

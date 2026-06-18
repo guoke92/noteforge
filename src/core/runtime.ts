@@ -6,6 +6,7 @@ import type { EventBus } from "./events";
 import type { DocumentService } from "./document/service";
 import type { VaultService } from "./vault/service";
 import type { WorkbenchService } from "./workbench/service";
+import type { WorkspaceSession } from "./workbench/types";
 import type { CommandRegistry } from "./command/types";
 import { createCommandRegistry } from "./command/command-registry.impl";
 import { registerCoreCommands } from "./command/register-core-commands";
@@ -25,6 +26,7 @@ import {
   removeDocumentFromEditor,
   syncDocumentToEditorTabs,
 } from "./bridge/editor-sync";
+import { perfSync } from "@/lib/startup-perf";
 
 export interface CoreRuntime {
   eventBus: EventBus;
@@ -43,16 +45,15 @@ let knowledgeUnwire: (() => void) | null = null;
 export function initCore(): CoreRuntime {
   if (runtime) return runtime;
 
+  return perfSync("core.initCore", () => {
   const eventBus = createEventBus();
   const vault = createVaultService({ eventBus });
-  let document!: DocumentService;
-  document = createDocumentService({
+  const document = createDocumentService({
     eventBus,
     vault,
-    onDocumentsChanged: () => {
-      for (const doc of document.list()) {
-        syncDocumentToEditorTabs(doc);
-      }
+    onDocumentsChanged: (documentId) => {
+      const doc = document.get(documentId);
+      if (doc) syncDocumentToEditorTabs(doc);
     },
   });
 
@@ -73,15 +74,30 @@ export function initCore(): CoreRuntime {
 
   eventBus.subscribe("document:closed", (event) => {
     removeDocumentFromEditor(event.documentId);
+    void import("@/store/large-file-overrides").then(({ useLargeFileOverrides }) => {
+      useLargeFileOverrides.getState().clearDocument(event.documentId);
+    });
     void workbench.persistSessionNow();
   });
 
+  eventBus.subscribe("document:opened", (event) => {
+    const doc = document.get(event.documentId);
+    if (doc?.vaultPath) {
+      void import("@/core/local-history/service").then(({ startAutoSnapshot }) => {
+        startAutoSnapshot(doc.vaultPath!, () => {
+          const current = document.get(event.documentId);
+          return current ? { content: current.content, dirty: current.dirty } : null;
+        });
+      });
+    }
+  });
+
   eventBus.subscribe("document:changed", (event) => {
-    workbench.schedulePersist();
+    workbench.schedulePersist("content");
     const doc = document.get(event.documentId);
     if (!doc?.vaultPath) {
       void import("@/store/editor").then(({ useEditorStore, isDirty }) => {
-        const tab = useEditorStore.getState().tabs.find((t) => t.id === event.documentId);
+        const tab = useEditorStore.getState().tabs.find((t) => t.documentId === event.documentId);
         if (tab?.kind === "scratch" && tab.scratchId && isDirty(tab)) {
           void import("@/core/session/scratch-autosave").then(({ scheduleScratchAutosave }) => {
             scheduleScratchAutosave(tab.scratchId!);
@@ -99,6 +115,7 @@ export function initCore(): CoreRuntime {
 
   runtime = { eventBus, vault, document, workbench, commands, dialog, knowledge, editorHost };
   return runtime;
+  });
 }
 
 export function getCore(): CoreRuntime {
@@ -139,6 +156,8 @@ export function createUntitledInPane(paneId: string) {
 
 export async function saveDocument(documentId: string): Promise<void> {
   const core = getCore();
+  await core.document.ensureContentLoaded(documentId);
+  core.editorHost.flushAllSurfacesForDocument(documentId);
   const doc = core.document.get(documentId);
   if (!doc) return;
 
@@ -146,25 +165,48 @@ export async function saveDocument(documentId: string): Promise<void> {
     const wsPath = core.vault.getCurrent()?.rootPath;
     const { suggestedSaveFileName } = await import("@/lib/editor-doc");
     const { useEditorStore } = await import("@/store/editor");
-    const tab = useEditorStore.getState().tabs.find((t) => t.id === documentId);
+    const tab = useEditorStore.getState().tabs.find((t) => t.documentId === documentId);
     if (!tab) return;
 
-    const defaultName = suggestedSaveFileName(tab);
+    const content = doc.content;
+    const defaultName = suggestedSaveFileName(tab, content);
     const path = await core.vault.pickSavePath(defaultName, wsPath ?? undefined);
     if (!path) {
       // Tauri: user cancelled native dialog — do not stack in-app SaveAs.
-      if (!isTauri()) openSaveAsDialog(documentId);
+      if (!isTauri()) openSaveAsDialog(tab.id);
       return;
     }
     await core.document.save(documentId, { kind: "path", vaultPath: path });
     syncDocumentToEditorTabs(core.document.get(documentId)!);
     await core.workbench.persistSession();
+
+    // Trigger local history snapshot after successful save-as
+    void import("@/core/local-history/service").then(({ saveHistorySnapshot }) => {
+      void saveHistorySnapshot(path, doc.content);
+    });
     return;
   }
 
   await core.document.save(documentId, { kind: "in-place" });
   syncDocumentToEditorTabs(core.document.get(documentId)!);
   await core.workbench.persistSession();
+
+  // Trigger local history snapshot after successful save
+  const savedDoc = core.document.get(documentId);
+  if (savedDoc?.vaultPath) {
+    void import("@/core/local-history/service").then(({ saveHistorySnapshot }) => {
+      void saveHistorySnapshot(savedDoc.vaultPath!, savedDoc.content);
+    });
+  }
+}
+
+export async function ensureDocumentContentLoaded(documentId: string) {
+  const doc = await getCore().document.ensureContentLoaded(documentId);
+  if (doc) {
+    const { pushContentToSurface } = await import("./bridge/editor-sync");
+    pushContentToSurface(doc);
+  }
+  return doc;
 }
 
 export async function flushCoreBeforeExit(): Promise<void> {
@@ -177,10 +219,12 @@ export async function flushCoreBeforeExit(): Promise<void> {
   await runtime.workbench.persistSessionNow();
 }
 
-export async function restoreWorkspaceSession(): Promise<boolean> {
-  return getCore().workbench.restoreSession();
+export async function restoreWorkspaceSession(
+  session?: WorkspaceSession | null,
+): Promise<boolean> {
+  return getCore().workbench.restoreSession(session);
 }
 
-export function scheduleWorkspacePersist(): void {
-  getCore().workbench.schedulePersist();
+export function scheduleWorkspacePersist(reason: "content" | "layout" = "layout"): void {
+  getCore().workbench.schedulePersist(reason);
 }

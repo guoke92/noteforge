@@ -1,0 +1,18 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/editor_host
+title: 编辑器宿主与表面管理
+scope:
+    - src/core/editor/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend_app/editor_feature
+    - path: frontend_app/core_infrastructure/document_management
+    - path: frontend_app/core_infrastructure/core_utilities
+    - path: frontend_app/shared_ui_and_utils
+    - path: frontend_app/core_infrastructure/command_system
+    - path: frontend_app/core_infrastructure/workbench
+    - path: frontend_app/navigation_and_panels
+    - path: backend_tauri/ai_knowledge
+    - path: backend_tauri/config_encryption_core
+    - path: backend_tauri/session_draft_vault

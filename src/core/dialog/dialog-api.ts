@@ -1,12 +1,13 @@
 import { getCore } from "@/core/runtime";
 import type { DocumentId } from "../events";
+import type { TabSlotId } from "../bridge/tab-id";
 
-export function openConfirmCloseDialog(documentId: DocumentId): void {
-  getCore().dialog.open({ kind: "confirm-close", documentId });
+export function openConfirmCloseDialog(tabId: TabSlotId): void {
+  getCore().dialog.open({ kind: "confirm-close", tabId });
 }
 
-export function openSaveAsDialog(documentId: DocumentId): void {
-  getCore().dialog.open({ kind: "save-as", documentId });
+export function openSaveAsDialog(tabId: TabSlotId): void {
+  getCore().dialog.open({ kind: "save-as", tabId });
 }
 
 export function openClosePaneDialog(paneId: string): void {

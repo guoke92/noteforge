@@ -1,12 +1,14 @@
-import { Bot, FileText, Link2, List, Network, X } from "lucide-react";
+import { Bot, Clock, FileText, Link2, List, Network, X } from "lucide-react";
 import { useUIStore } from "@/store/ui";
 import type { RightPanelMode } from "@/store/ui";
 import { useEditorStore } from "@/store/editor";
+import { useDocumentRecord } from "@/hooks/useDocumentContent";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { OutlinePanel } from "./OutlinePanel";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { GraphView } from "@/features/graph/GraphView";
 import { AIPanel } from "@/features/ai/AIPanel";
+import { TimelinePanel } from "./TimelinePanel";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Button } from "@/components/ui/Button";
 
@@ -16,6 +18,7 @@ const TABS: { mode: RightPanelMode; icon: typeof Link2; label: string }[] = [
   { mode: "properties", icon: FileText, label: "属性" },
   { mode: "tree", icon: Network, label: "知识图谱" },
   { mode: "ai", icon: Bot, label: "AI 协作者" },
+  { mode: "history", icon: Clock, label: "本地历史" },
 ];
 
 export function RightPanel() {
@@ -25,7 +28,9 @@ export function RightPanel() {
   const activePaneId = useEditorStore((s) => s.activePaneId);
   const activeId = useEditorStore((s) => s.activeTabIdByPane[activePaneId]);
   const tab = useEditorStore((s) => s.tabs.find((t) => t.id === activeId));
+  const doc = useDocumentRecord(tab?.documentId ?? "");
   const requestRevealLine = useEditorStore((s) => s.requestRevealLine);
+  const docContent = doc?.content ?? "";
 
   const handleHeadingClick = (line: number) => {
     if (!tab) return;
@@ -59,14 +64,21 @@ export function RightPanel() {
       <div className="flex-1 overflow-hidden">
         {mode === "backlinks" && tab?.path ? (
           <BacklinksPanel filePath={tab.path} />
-        ) : mode === "outline" && tab ? (
-          <OutlinePanel content={tab.content} onHeadingClick={handleHeadingClick} />
+        ) : mode === "outline" && tab && doc ? (
+          <OutlinePanel
+            documentId={tab.documentId}
+            tier={doc.tier}
+            content={docContent}
+            onHeadingClick={handleHeadingClick}
+          />
         ) : mode === "properties" && tab ? (
-          <PropertiesPanel content={tab.content} filePath={tab.path} />
+          <PropertiesPanel content={docContent ?? ""} filePath={tab.path} />
         ) : mode === "tree" ? (
           <GraphView />
         ) : mode === "ai" ? (
           <AIPanel />
+        ) : mode === "history" ? (
+          <TimelinePanel vaultPath={tab?.path} />
         ) : (
           <div className="flex h-full items-center justify-center px-3 text-center text-xs text-text-tertiary">
             打开一个文件以查看相关信息

@@ -21,6 +21,8 @@ impl<'a> IndexPipeline<'a> {
         file_path: &str,
         title: &str,
         content: &str,
+        disk_mtime: i64,
+        disk_size: i64,
     ) -> Result<(), NoteforgeError> {
         // Begin transaction
         self.conn.execute_batch("BEGIN TRANSACTION")?;
@@ -32,7 +34,12 @@ impl<'a> IndexPipeline<'a> {
             let knowledge_engine = KnowledgeEngine::new(self.conn)?;
             let vector_engine = VectorEngine::new(self.conn)?;
 
-            let note_id = uuid::Uuid::new_v4().to_string();
+            let note_id = note_repo
+                .find_by_workspace_and_path(workspace_id, file_path)
+                .ok()
+                .flatten()
+                .map(|n| n.id)
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
             // Step 1: Upsert note record
             note_repo.upsert(
@@ -42,6 +49,8 @@ impl<'a> IndexPipeline<'a> {
                 Some(title),
                 Some(content),
                 Some(detect_language(file_path)),
+                disk_mtime,
+                disk_size,
             )?;
 
             // Step 2: Update FTS index
