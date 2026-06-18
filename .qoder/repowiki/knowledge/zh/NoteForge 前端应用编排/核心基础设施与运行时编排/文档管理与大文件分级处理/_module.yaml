@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/document_management
+title: 文档管理与大文件分级处理
+scope:
+    - src/core/document/
+source_files: []
+depends_on: []
+related_to: []

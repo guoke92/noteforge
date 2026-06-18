@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/local_history
+title: 本地历史快照服务
+scope:
+    - src/core/local-history/
+source_files: []
+depends_on: []
+related_to: []

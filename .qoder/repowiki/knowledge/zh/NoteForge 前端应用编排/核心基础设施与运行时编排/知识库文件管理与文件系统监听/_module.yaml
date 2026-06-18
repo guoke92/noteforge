@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/vault_service
+title: 知识库文件管理与文件系统监听
+scope:
+    - src/core/vault/
+source_files: []
+depends_on: []
+related_to: []

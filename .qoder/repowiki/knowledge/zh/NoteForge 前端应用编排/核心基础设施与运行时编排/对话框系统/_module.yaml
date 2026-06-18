@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend_app/core_infrastructure/dialog_system
+title: 对话框系统
+scope:
+    - src/core/dialog/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: frontend_app/navigation_and_panels
+title: 导航与上下文面板
+scope:
+    - src/components/sidebar/
+    - src/components/right/
+    - src/features/graph/
+    - src/features/ai/
+source_files: []
+depends_on: []
+related_to: []

@@ -2,7 +2,7 @@
 schema_version: 1
 locale: zh-CN
 branch: main
-exported_at: "2026-06-16T03:47:27Z"
+exported_at: "2026-06-18T11:26:11Z"
 modules:
     "":
         dir_name: NoteForge 桌面应用根工作区
@@ -32,11 +32,12 @@ modules:
             - src-tauri/
         source_files: []
         children:
-            - backend_tauri/session_draft_vault
+            - backend_tauri/local_history
+            - backend_tauri/workspace_editor
             - backend_tauri/search_memory_scratch
             - backend_tauri/config_encryption_core
+            - backend_tauri/session_draft_vault
             - backend_tauri/ai_knowledge
-            - backend_tauri/workspace_editor
         depends_on: []
         related_to:
             - path: frontend_app
@@ -54,19 +55,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/search_memory_scratch
-            - path: frontend_app/editor_feature
-            - path: backend_tauri/config_encryption_core
-            - path: backend_tauri/workspace_editor
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: frontend_app/core_infrastructure/command_system
+        related_to: []
     backend_tauri/config_encryption_core:
         dir_name: 配置管理与数据加密核心
         title: 配置管理与数据加密核心
@@ -83,19 +72,17 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/shared_ui_and_utils
-            - path: backend_tauri/workspace_editor
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/session_draft_vault
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/editor_feature
-            - path: frontend_app/navigation_and_panels
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/core_infrastructure/workbench
+        related_to: []
+    backend_tauri/local_history:
+        dir_name: 本地历史快照管理
+        title: 本地历史快照管理
+        scope:
+            - src-tauri/src/local_history.rs
+            - src-tauri/src/commands/local_history.rs
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
     backend_tauri/search_memory_scratch:
         dir_name: 搜索、记忆与草稿状态管理
         title: 搜索、记忆与草稿状态管理
@@ -133,16 +120,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: backend_tauri/config_encryption_core
-            - path: backend_tauri/workspace_editor
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/search_memory_scratch
-            - path: frontend_app/core_infrastructure/editor_host
+        related_to: []
     backend_tauri/workspace_editor:
         dir_name: 工作区与编辑器核心管理
         title: 工作区与编辑器核心管理
@@ -164,13 +142,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: backend_tauri/config_encryption_core
-            - path: backend_tauri/search_memory_scratch
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/session_draft_vault
+        related_to: []
     docs_design:
         dir_name: NoteForge UI_UX 设计规范
         title: NoteForge UI/UX 设计规范
@@ -194,11 +166,11 @@ modules:
             - src/
         source_files: []
         children:
-            - frontend_app/navigation_and_panels
+            - frontend_app/core_infrastructure
             - frontend_app/editor_feature
+            - frontend_app/navigation_and_panels
             - frontend_app/shared_ui_and_utils
             - frontend_app/shell_and_dialogs
-            - frontend_app/core_infrastructure
         depends_on: []
         related_to:
             - path: backend_tauri
@@ -209,12 +181,13 @@ modules:
             - src/core/
         source_files: []
         children:
+            - frontend_app/core_infrastructure/core_utilities
+            - frontend_app/core_infrastructure/dialog_system
+            - frontend_app/core_infrastructure/local_history
             - frontend_app/core_infrastructure/workbench
             - frontend_app/core_infrastructure/document_management
-            - frontend_app/core_infrastructure/dialog_system
-            - frontend_app/core_infrastructure/core_utilities
-            - frontend_app/core_infrastructure/vault_service
             - frontend_app/core_infrastructure/command_system
+            - frontend_app/core_infrastructure/vault_service
             - frontend_app/core_infrastructure/editor_host
         depends_on: []
         related_to: []
@@ -226,16 +199,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/navigation_and_panels
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: docs_design
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/search_memory_scratch
+        related_to: []
     frontend_app/core_infrastructure/core_utilities:
         dir_name: 核心基础设施与运行时编排
         title: 核心基础设施与运行时编排
@@ -250,56 +214,25 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/core_infrastructure/command_system
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/config_encryption_core
-            - path: frontend_app/editor_feature
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/search_memory_scratch
-            - path: backend_tauri/session_draft_vault
+        related_to: []
     frontend_app/core_infrastructure/dialog_system:
-        dir_name: 对话框管理系统
-        title: 对话框管理系统
+        dir_name: 对话框系统
+        title: 对话框系统
         scope:
             - src/core/dialog/
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: docs_design
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/workbench
-            - path: backend_tauri/ai_knowledge
+        related_to: []
     frontend_app/core_infrastructure/document_management:
-        dir_name: 文档生命周期与冲突管理
-        title: 文档生命周期与冲突管理
+        dir_name: 文档管理与大文件分级处理
+        title: 文档管理与大文件分级处理
         scope:
             - src/core/document/
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: backend_tauri/workspace_editor
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/editor_feature
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: backend_tauri/session_draft_vault
-            - path: backend_tauri/ai_knowledge
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/config_encryption_core
+        related_to: []
     frontend_app/core_infrastructure/editor_host:
         dir_name: 编辑器宿主与表面管理
         title: 编辑器宿主与表面管理
@@ -308,37 +241,25 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/editor_feature
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/command_system
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/config_encryption_core
-            - path: backend_tauri/session_draft_vault
+        related_to: []
+    frontend_app/core_infrastructure/local_history:
+        dir_name: 本地历史快照服务
+        title: 本地历史快照服务
+        scope:
+            - src/core/local-history/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
     frontend_app/core_infrastructure/vault_service:
-        dir_name: 知识库文件管理与监听服务
-        title: 知识库文件管理与监听服务
+        dir_name: 知识库文件管理与文件系统监听
+        title: 知识库文件管理与文件系统监听
         scope:
             - src/core/vault/
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: backend_tauri/workspace_editor
-            - path: backend_tauri/session_draft_vault
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/navigation_and_panels
-            - path: frontend_app/core_infrastructure/document_management
-            - path: backend_tauri/search_memory_scratch
-            - path: backend_tauri/config_encryption_core
-            - path: frontend_app/editor_feature
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/core_infrastructure/command_system
+        related_to: []
     frontend_app/core_infrastructure/workbench:
         dir_name: 工作台会话与布局管理
         title: 工作台会话与布局管理
@@ -347,20 +268,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: backend_tauri/session_draft_vault
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/editor_feature
-            - path: docs_design
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: backend_tauri/ai_knowledge
-            - path: backend_tauri/config_encryption_core
+        related_to: []
     frontend_app/editor_feature:
-        dir_name: 多模态编辑器与文档交互
-        title: 多模态编辑器与文档交互
+        dir_name: 多模态编辑器核心与分级渲染
+        title: 多模态编辑器核心与分级渲染
         scope:
             - src/components/editor/
             - src/features/markdown/
@@ -368,19 +279,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/navigation_and_panels
-            - path: backend_tauri/ai_knowledge
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/core_infrastructure/document_management
-            - path: docs_design
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: backend_tauri/config_encryption_core
+        related_to: []
     frontend_app/navigation_and_panels:
-        dir_name: 应用导航与多面板布局
-        title: 应用导航与多面板布局
+        dir_name: 导航与上下文面板
+        title: 导航与上下文面板
         scope:
             - src/components/sidebar/
             - src/components/right/
@@ -389,21 +291,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: backend_tauri/ai_knowledge
-            - path: frontend_app/editor_feature
-            - path: frontend_app/shared_ui_and_utils
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/core_infrastructure/vault_service
-            - path: docs_design
-            - path: frontend_app/core_infrastructure/command_system
-            - path: frontend_app/core_infrastructure/document_management
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: backend_tauri/config_encryption_core
-            - path: backend_tauri/session_draft_vault
+        related_to: []
     frontend_app/shared_ui_and_utils:
-        dir_name: 前端共享 UI 组件与基础设施
-        title: 前端共享 UI 组件与基础设施
+        dir_name: 前端共享 UI 组件与基础工具库
+        title: 前端共享 UI 组件与基础工具库
         scope:
             - src/components/ui/
             - src/hooks/
@@ -413,18 +304,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: backend_tauri/config_encryption_core
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: docs_design
-            - path: frontend_app/navigation_and_panels
-            - path: frontend_app/core_infrastructure/command_system
-            - path: frontend_app/shell_and_dialogs
-            - path: frontend_app/core_infrastructure/editor_host
-            - path: frontend_app/core_infrastructure/workbench
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: backend_tauri/search_memory_scratch
-            - path: backend_tauri/ai_knowledge
+        related_to: []
     frontend_app/shell_and_dialogs:
         dir_name: 应用外壳与全局对话框管理
         title: 应用外壳与全局对话框管理
@@ -437,12 +317,4 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: frontend_app/core_infrastructure/dialog_system
-            - path: frontend_app/core_infrastructure/command_system
-            - path: backend_tauri/search_memory_scratch
-            - path: frontend_app/core_infrastructure/core_utilities
-            - path: frontend_app/shared_ui_and_utils
-            - path: docs_design
-            - path: backend_tauri/config_encryption_core
-            - path: frontend_app/core_infrastructure/vault_service
+        related_to: []

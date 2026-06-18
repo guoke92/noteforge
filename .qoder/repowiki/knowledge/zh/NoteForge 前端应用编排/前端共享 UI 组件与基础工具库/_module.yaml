@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: frontend_app/shared_ui_and_utils
+title: 前端共享 UI 组件与基础工具库
+scope:
+    - src/components/ui/
+    - src/hooks/
+    - src/store/
+    - src/lib/
+    - src/ipc/
+source_files: []
+depends_on: []
+related_to: []

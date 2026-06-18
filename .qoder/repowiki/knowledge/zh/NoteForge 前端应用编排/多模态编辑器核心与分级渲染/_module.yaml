@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: frontend_app/editor_feature
+title: 多模态编辑器核心与分级渲染
+scope:
+    - src/components/editor/
+    - src/features/markdown/
+    - src/features/json-yaml/
+source_files: []
+depends_on: []
+related_to: []

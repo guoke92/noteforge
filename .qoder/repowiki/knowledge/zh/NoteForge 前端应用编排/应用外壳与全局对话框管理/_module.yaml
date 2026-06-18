@@ -9,12 +9,4 @@ scope:
     - src/main.tsx
 source_files: []
 depends_on: []
-related_to:
-    - path: frontend_app/core_infrastructure/dialog_system
-    - path: frontend_app/core_infrastructure/command_system
-    - path: backend_tauri/search_memory_scratch
-    - path: frontend_app/core_infrastructure/core_utilities
-    - path: frontend_app/shared_ui_and_utils
-    - path: docs_design
-    - path: backend_tauri/config_encryption_core
-    - path: frontend_app/core_infrastructure/vault_service
+related_to: []
