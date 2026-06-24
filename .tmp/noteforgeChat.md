@@ -932,7 +932,7 @@ Monaco 内部的 piece tree 只优化了**编辑器内部**的编辑；一旦上
 ```9:9:src/core/invariants.ts
     "Canonical content lives on DocumentRecord.content only. Surfaces emit patches; they do not persist independently.",
 ```
-
+    
 也就是说，这次改造是**对齐既有设计**，不是换一套产品能力。
 
 ***

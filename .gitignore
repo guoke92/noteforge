@@ -39,3 +39,11 @@ yarn-error.log*
 # Rust / Tauri
 src-tauri/target
 src-tauri/Cargo.lock
+src-tauri/gen/
+
+# Temporary / design docs
+.tmp/
+
+# Cursor / agent transcripts
+.cursor/
+**/agent-transcripts/

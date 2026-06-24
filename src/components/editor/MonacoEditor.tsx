@@ -70,6 +70,7 @@ export function MonacoEditor({
   bindEditor,
 }: Props) {
   const editorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const hostHandleRef = useRef<LiveSurfaceHandle | null>(null);
   const wikiProviderRef = useRef<monacoNs.IDisposable | null>(null);
   const cursorLineCbRef = useRef(onCursorLineChange);
@@ -366,8 +367,25 @@ export function MonacoEditor({
       },
     };
     hostHandleRef.current = handle;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => editor.layout());
+    });
     endMount();
   };
+
+  useEffect(() => {
+    const ed = editorRef.current;
+    const container = containerRef.current;
+    if (!ed || !container) return;
+
+    const layout = () => ed.layout();
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(layout);
+    });
+    ro.observe(container);
+    requestAnimationFrame(layout);
+    return () => ro.disconnect();
+  }, [editor]);
 
   useEffect(() => {
     const handle = hostHandleRef.current;
@@ -399,6 +417,7 @@ export function MonacoEditor({
 
   const displayLang = tabDisplayLanguage(tab);
   const isMarkdown = displayLang === "markdown";
+  const isMarkdownSource = isMarkdown && _markdownVariant === "source";
 
   if (needsHeavySlot && !slotGranted) {
     return (
@@ -414,7 +433,7 @@ export function MonacoEditor({
   }
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden">
+    <div ref={containerRef} className="relative h-full min-h-0 w-full overflow-hidden">
       <Editor
         key={tab.id}
         height="100%"
@@ -439,7 +458,9 @@ export function MonacoEditor({
           minimap: { enabled: true, side: "right", scale: 1 },
           smoothScrolling: true,
           padding: { top: 12, bottom: 12 },
-          wordWrap: isMarkdown ? "on" : "off",
+          automaticLayout: true,
+          // Source mode: keep table rows intact; word-wrap + split resize can corrupt line layout.
+          wordWrap: isMarkdown && !isMarkdownSource ? "on" : "off",
           renderWhitespace: "selection",
           tabSize: 2,
           bracketPairColorization: { enabled: true },

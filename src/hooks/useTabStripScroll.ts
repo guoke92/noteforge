@@ -72,7 +72,11 @@ export function useTabStripScroll(
     if (!scrollEl) return;
 
     scrollEl.addEventListener("scroll", updateScrollState, { passive: true });
-    const ro = new ResizeObserver(updateScrollState);
+    let rafId = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateScrollState);
+    });
     ro.observe(scrollEl);
     if (barEl) ro.observe(barEl);
     const toolbarEl = toolbarRef.current;
@@ -81,6 +85,7 @@ export function useTabStripScroll(
       ro.observe(child);
     }
     return () => {
+      cancelAnimationFrame(rafId);
       scrollEl.removeEventListener("scroll", updateScrollState);
       ro.disconnect();
     };
