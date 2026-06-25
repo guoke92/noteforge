@@ -6,7 +6,7 @@ export interface AutoSaveConfig {
 }
 
 export interface EditorDefaultsConfig {
-  defaultSurfaceMode: "write" | "source" | "read";
+  defaultSurfaceMode: "live" | "source";
   tabSize: number;
   fontSize: number;
   fontFamily: string;
@@ -27,7 +27,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
     debounceMs: 2000,
   },
   editor: {
-    defaultSurfaceMode: "write",
+    defaultSurfaceMode: "live",
     tabSize: 2,
     fontSize: 15,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif",

@@ -69,8 +69,16 @@ export interface WorkbenchState {
 
 export function normalizeSurfaceMode(mode?: string): EditorSurfaceMode {
   if (mode === "source" || mode === "edit") return "source";
-  if (mode === "read" || mode === "preview") return "read";
-  if (mode === "write" || mode === "live" || mode === "split") return "write";
-  return "write";
+  // Legacy session values → live (read/preview/write/split were pre-NFEP)
+  if (
+    mode === "live" ||
+    mode === "write" ||
+    mode === "read" ||
+    mode === "preview" ||
+    mode === "split"
+  ) {
+    return "live";
+  }
+  return "live";
 }
 

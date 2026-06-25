@@ -28,7 +28,7 @@ export function createEditorHostService(deps: {
 
   function getActiveMode(documentId: DocumentId): EditorSurfaceMode {
     const tab = tabsForDocument(documentId)[0];
-    if (!tab) return "write";
+    if (!tab) return "live";
     return resolveSurfaceMode(tab);
   }
 

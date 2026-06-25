@@ -2,7 +2,7 @@ import type { EditorSurfaceMode } from "@/core/document/types";
 import type { EditorTab } from "@/store/editor";
 import { normalizeSurfaceMode } from "@/core/workbench/types";
 
-/** UI surface mode — aligned with DocumentService.viewState.mode (ADR-005). */
+/** UI surface mode — aligned with DocumentService.viewState.mode (NFEP). */
 export type SurfaceMode = EditorSurfaceMode;
 
 /** Resolve tab surface mode; session legacy strings normalized on restore. */
@@ -12,21 +12,15 @@ export function resolveSurfaceMode(tab: Pick<EditorTab, "surfaceMode">): Surface
 
 export function surfaceModeLabel(mode: SurfaceMode): string {
   switch (mode) {
-    case "write":
+    case "live":
       return "写作";
     case "source":
       return "源码";
-    case "read":
-      return "阅读";
   }
 }
 
-export function isReadOnlySurface(mode: SurfaceMode): boolean {
-  return mode === "read";
-}
-
-/** Order used when cycling write → read → source (TabBar / keyboard). */
-export const SURFACE_MODE_CYCLE_ORDER: readonly SurfaceMode[] = ["write", "read", "source"];
+/** Order used when cycling live ↔ source (TabBar / keyboard). */
+export const SURFACE_MODE_CYCLE_ORDER: readonly SurfaceMode[] = ["live", "source"];
 
 export function nextSurfaceMode(current: SurfaceMode): SurfaceMode {
   const idx = SURFACE_MODE_CYCLE_ORDER.indexOf(current);

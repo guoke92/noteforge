@@ -32,3 +32,9 @@ pub struct FileRangeResponse {
     pub total_size: u64,
     pub truncated: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageDataUrlResponse {
+    pub data_url: String,
+}

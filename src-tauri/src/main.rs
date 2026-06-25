@@ -35,6 +35,7 @@ fn main() {
             noteforge_lib::commands::file::move_file,
             noteforge_lib::commands::file::file_stat,
             noteforge_lib::commands::file::read_file_range,
+            noteforge_lib::commands::file::read_image_data_url,
             // Editor
             noteforge_lib::commands::editor::detect_language,
             noteforge_lib::commands::editor::format_code,

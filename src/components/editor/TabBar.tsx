@@ -7,11 +7,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns,
-  FileText,
   Pencil,
   Merge,
 } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useEditorStore, isDirty, isMainPane, type EditorTab } from "@/store/editor";
 import { isMarkdownTab, isScratchTab, tabDisplayLanguage, tabLabel } from "@/lib/editor-doc";
 import { languageBadge } from "@/lib/language-registry";
@@ -20,9 +19,11 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { MOD_LABEL } from "@/hooks/useShortcuts";
 import { useTabStripScroll } from "@/hooks/useTabStripScroll";
+import type { TabStripApi } from "@/contexts/tab-strip-api";
 
 interface Props {
   paneId: string;
+  onApiReady?: (api: TabStripApi) => void;
 }
 
 function langBadge(lang: string): string {
@@ -98,13 +99,8 @@ function tabContextItems(tab: EditorTab, paneTabs: EditorTab[]): ContextMenuItem
           { separator: true, label: "" },
           {
             label: "写作模式",
-            onSelect: () => state.setSurfaceMode(tab.id, "write"),
-            checked: resolveSurfaceMode(tab) === "write",
-          },
-          {
-            label: "阅读模式",
-            onSelect: () => state.setSurfaceMode(tab.id, "read"),
-            checked: resolveSurfaceMode(tab) === "read",
+            onSelect: () => state.setSurfaceMode(tab.id, "live"),
+            checked: resolveSurfaceMode(tab) === "live",
           },
           {
             label: "源码模式",
@@ -224,18 +220,11 @@ function MarkdownSurfaceToggle({ tab }: { tab: EditorTab }) {
   return (
     <div className="flex h-7 items-center rounded-sm border border-border bg-bg-primary p-0.5">
       <SurfaceModeButton
-        active={mode === "write"}
+        active={mode === "live"}
         title={`写作 (${MOD_LABEL}⇧I)`}
-        onClick={() => setSurfaceMode(tab.id, "write")}
+        onClick={() => setSurfaceMode(tab.id, "live")}
       >
         <Pencil size={11} />
-      </SurfaceModeButton>
-      <SurfaceModeButton
-        active={mode === "read"}
-        title="阅读"
-        onClick={() => setSurfaceMode(tab.id, "read")}
-      >
-        <FileText size={11} />
       </SurfaceModeButton>
       <SurfaceModeButton
         active={mode === "source"}
@@ -287,7 +276,7 @@ function NewTabButton({ onClick, title }: { onClick: () => void; title?: string 
   );
 }
 
-export function TabBar({ paneId }: Props) {
+export function TabBar({ paneId, onApiReady }: Props) {
   const panes = useEditorStore((s) => s.panes);
   const allTabs = useEditorStore((s) => s.tabs);
   const tabs = allTabs.filter((t) => t.paneId === paneId);
@@ -313,7 +302,12 @@ export function TabBar({ paneId }: Props) {
     scrollLeft,
     scrollRight,
     onWheel,
+    scrollTabIntoViewIfNeeded,
   } = useTabStripScroll(activeId, tabs.length, barRef, toolbarRef, sessionRestored);
+
+  useEffect(() => {
+    onApiReady?.({ scrollTabIntoViewIfNeeded });
+  }, [onApiReady, scrollTabIntoViewIfNeeded]);
 
   const plusPinned = needsScroll && tabs.length > 0;
 

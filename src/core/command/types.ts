@@ -16,7 +16,7 @@ export interface CommandContext {
   isInputContext: boolean;
   isMarkdownActive: boolean;
   hasActiveTab: boolean;
-  surfaceMode: "write" | "source" | "read" | null;
+  surfaceMode: "live" | "source" | null;
   activeTab?: import("@/store/editor").EditorTab;
 }
 

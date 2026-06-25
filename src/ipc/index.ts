@@ -248,6 +248,10 @@ export const fs = {
       { path, offset, length },
       () => stub.readFileRange(path, offset, length),
     ),
+  readImageDataUrl: (path: string) =>
+    call<{ dataUrl: string }>("read_image_data_url", { path }, () =>
+      stub.readImageDataUrl(path),
+    ),
 };
 
 /* ============================================================

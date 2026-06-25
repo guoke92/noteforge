@@ -148,7 +148,7 @@ export async function openDocumentInPane(vaultPath: string, paneId: string) {
 }
 
 export function createUntitledInPane(paneId: string) {
-  const doc = getCore().document.createEphemeral({ paneId, initialMode: "write" });
+  const doc = getCore().document.createEphemeral({ paneId, initialMode: "live" });
   ensureDocumentTabInPane(doc, paneId);
   void getCore().workbench.persistSessionNow();
   return doc;

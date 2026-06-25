@@ -146,7 +146,7 @@ export async function openDroppedFileBlobs(files: File[]): Promise<void> {
       paneId,
       title,
       content,
-      initialMode: "write",
+      initialMode: "live",
     });
     ensureDocumentTabInPane(doc, paneId);
     opened += 1;

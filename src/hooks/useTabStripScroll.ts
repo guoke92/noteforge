@@ -137,6 +137,25 @@ export function useTabStripScroll(
   const scrollLeft = useCallback(() => scrollBy(-SCROLL_STEP), [scrollBy]);
   const scrollRight = useCallback(() => scrollBy(SCROLL_STEP), [scrollBy]);
 
+  const scrollTabIntoViewIfNeeded = useCallback(
+    (tabId: string, behavior: ScrollBehavior = "smooth") => {
+      const scrollEl = scrollRef.current;
+      const tabEl = tabRefs.current.get(tabId);
+      if (!scrollEl || !tabEl) return;
+
+      const tabLeft = tabEl.offsetLeft;
+      const tabRight = tabLeft + tabEl.offsetWidth;
+      const visibleLeft = scrollEl.scrollLeft;
+      const visibleRight = visibleLeft + scrollEl.clientWidth;
+
+      if (tabLeft >= visibleLeft - 1 && tabRight <= visibleRight + 1) return;
+
+      tabEl.scrollIntoView({ inline: "nearest", block: "nearest", behavior });
+      queueMicrotask(updateScrollState);
+    },
+    [updateScrollState],
+  );
+
   const onWheel = useCallback(
     (e: WheelEvent) => {
       const el = scrollRef.current;
@@ -158,5 +177,6 @@ export function useTabStripScroll(
     scrollRight,
     onWheel,
     updateScrollState,
+    scrollTabIntoViewIfNeeded,
   };
 }

@@ -1,26 +1,21 @@
 import { useEffect } from "react";
 import type { EditorTab } from "@/store/editor";
 import { useEditorStore } from "@/store/editor";
-import { resolveSurfaceMode, isReadOnlySurface } from "@/lib/surface-mode";
-import { MonacoEditor } from "@/components/editor/MonacoEditor";
-import { MilkdownSurface } from "./MilkdownSurface";
 import { getCore } from "@/core/runtime";
+import { MarkdownHybridSurface } from "@/features/markdown-engine/MarkdownHybridSurface";
 
 interface Props {
   tab: EditorTab;
 }
 
 /**
- * Markdown surfaces (ADR-005):
- * - write: Milkdown WYSIWYG
- * - read:  Milkdown readOnly (same adapter)
- * - source: Monaco
+ * Markdown surface (NFEP P1):
+ * - live:   CM6 Hybrid IR (Typora-style)
+ * - source: same CM6 buffer, decorations off
  */
 export function MarkdownPanel({ tab }: Props) {
   const revealLineRequest = useEditorStore((s) => s.revealLineRequest);
   const consumeRevealLine = useEditorStore((s) => s.consumeRevealLine);
-  const mode = resolveSurfaceMode(tab);
-  const readOnly = isReadOnlySurface(mode);
 
   useEffect(() => {
     if (!revealLineRequest || revealLineRequest.tabId !== tab.id) return;
@@ -37,23 +32,7 @@ export function MarkdownPanel({ tab }: Props) {
       if (attempt()) consumeRevealLine();
     });
     return () => cancelAnimationFrame(raf);
-  }, [revealLineRequest, tab.id, consumeRevealLine]);
+  }, [revealLineRequest, tab.id, tab.documentId, consumeRevealLine]);
 
-  if (mode === "source") {
-    return (
-      <MonacoEditor
-        tab={tab}
-        markdownVariant="source"
-        hostSurfaceMode="source"
-      />
-    );
-  }
-
-  return (
-    <MilkdownSurface
-      tab={tab}
-      mode={mode}
-      readOnly={readOnly}
-    />
-  );
+  return <MarkdownHybridSurface tab={tab} />;
 }

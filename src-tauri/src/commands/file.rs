@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use crate::error::NoteforgeError;
-use crate::models::{FileEntry, ReadFileResponse, FileStat, FileRangeResponse};
+use crate::models::{FileEntry, FileRangeResponse, FileStat, ImageDataUrlResponse, ReadFileResponse};
 
 pub fn ensure_real_file_path(path: &str) -> Result<PathBuf, NoteforgeError> {
     if path.contains("://") || path.starts_with("untitled:") {
@@ -261,4 +261,40 @@ fn estimate_line_count(path: &Path, file_size: u64) -> u64 {
     // Extrapolate
     let ratio = file_size as f64 / sample_len as f64;
     ((newlines_in_sample as f64 * ratio).ceil() as u64) + 1
+}
+
+fn image_mime_from_path(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+pub fn read_image_data_url(path: String) -> Result<ImageDataUrlResponse, NoteforgeError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    let path = ensure_real_file_path(&path)?;
+    let path = path.as_path();
+    if !path.exists() {
+        return Err(NoteforgeError::NotFound("Image file not found".to_string()));
+    }
+
+    let bytes = std::fs::read(path).map_err(NoteforgeError::Io)?;
+    let mime = image_mime_from_path(path);
+    let data_url = format!("data:{};base64,{}", mime, STANDARD.encode(bytes));
+
+    Ok(ImageDataUrlResponse { data_url })
 }

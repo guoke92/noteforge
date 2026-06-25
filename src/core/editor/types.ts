@@ -3,19 +3,17 @@ import type { ContentPatch, CursorAnchor, EditorSurfaceMode, ViewState } from ".
 import type { LiveSurfaceHandle } from "./surface-handle";
 
 /**
- * Phase 1+: Editor Host routes surfaces. Phase 0 defines contract only.
- * ADR-005: Surfaces never own canonical content — they emit patches upward.
+ * Phase 1+: Editor Host routes surfaces.
+ * NFEP: Surfaces never own canonical content — they emit patches upward.
  *
  * Surface modes:
- * - write: Milkdown WYSIWYG (default)
- * - source: Monaco markdown source
- * - read: same adapter as write with readOnly=true (no separate preview stack)
+ * - live:   Typora-style editing (CM6 Hybrid in P1)
+ * - source: raw markdown / code text
  */
 
 export interface EditorSurfaceProps {
   documentId: DocumentId;
   mode: EditorSurfaceMode;
-  /** true when mode === "read" — write surface in presentation / no-edit mode */
   readOnly?: boolean;
 }
 

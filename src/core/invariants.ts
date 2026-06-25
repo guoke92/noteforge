@@ -20,9 +20,9 @@ export const INVARIANTS = {
   ONE_INSTANCE_PER_PATH:
     "At most one DocumentRecord per non-null vaultPath. Split views reference the same documentId.",
 
-  /** ADR-005 — Phase 1 */
+  /** ADR-005 / NFEP */
   MODE_SWITCH_FLUSH:
-    "Switching write/source/read flushes surface edits through DocumentService.applyPatch before remount.",
+    "Switching live/source flushes surface edits through DocumentService.applyPatch before remount.",
 
   /** ADR-006 */
   FULL_SESSION:
@@ -50,18 +50,21 @@ export const PHASE_0_DOD = [
   "Legacy scratch/session code path removed or bridged with deprecation",
 ] as const;
 
-/** Phase 1 definition of done — Milkdown write + readOnly read; no live split. */
-export const PHASE_1_DOD = [
-  "Surface modes are write | source | read only (live split removed)",
+/** NFEP Phase 0 — platform skeleton + Monaco markdown transitional. */
+export const NFEP_P0_DOD = [
+  "SurfaceRegistry resolves editor surfaces by content kind",
+  "MarkdownLanguageService provides shared parse/outline/wikilink",
+  "Milkdown/Crepe removed",
+  "Surface modes are live | source only",
+  "Markdown live/source use Monaco until CM6 Hybrid (P1)",
+] as const;
+
+/** NFEP Phase 1 — CM6 Typora-style hybrid (in progress). */
+export const NFEP_P1_DOD = [
+  "Markdown live mode uses CM6 Hybrid IR (single buffer)",
+  "live ↔ source toggles CM6 decorations without remount",
   "EditorHostService flushes surfaces on mode switch (ADR-005)",
-  "write and read use Milkdown Crepe with wikilink remark plugin",
-  "source uses Monaco markdown editor",
-  "Outline revealLine works in write/read without forcing source",
-  "Preview mode syncs DocumentService.viewState for session restore",
-  "KnowledgeQueryService resolves wikilinks and backs backlinks IPC",
-  "Daily note opens/creates Journal/YYYY-MM-DD.md via vault",
-  "Properties panel shows YAML front matter for active document",
-  "Outline panel jumps to heading line in editor",
-  "Monaco [[ wikilink completion uses vault tree index",
-  "Workbench closeTab respects dirty state and multi-pane docs",
+  "Outline revealLine works in live without forcing source",
+  "Wiki links render and navigate in live mode",
+  "GFM tables editable in live mode",
 ] as const;

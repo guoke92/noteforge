@@ -394,6 +394,19 @@ export async function readFileRange(
   return { content, totalSize, truncated: offset + length < totalSize };
 }
 
+export async function readImageDataUrl(path: string): Promise<{ dataUrl: string }> {
+  await sleep(20);
+  if (!fileStore.has(path)) throw new Error("FILE_NOT_FOUND");
+  const content = fileStore.get(path)!;
+  const bytes = new TextEncoder().encode(content);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  const dataUrl = `data:image/png;base64,${btoa(binary)}`;
+  return { dataUrl };
+}
+
 /* ============================================================
  *  Editor
  * ============================================================ */

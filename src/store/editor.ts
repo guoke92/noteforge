@@ -558,7 +558,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               path: targetPath,
               displayName: name,
               language: lang,
-              surfaceMode: isMd ? t.surfaceMode || "write" : "source",
+              surfaceMode: isMd ? t.surfaceMode || "live" : "source",
             }
           : t,
       ),

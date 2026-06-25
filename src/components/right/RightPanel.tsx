@@ -72,7 +72,7 @@ export function RightPanel() {
             onHeadingClick={handleHeadingClick}
           />
         ) : mode === "properties" && tab ? (
-          <PropertiesPanel content={docContent ?? ""} filePath={tab.path} />
+          <PropertiesPanel content={docContent ?? ""} filePath={tab.path} documentId={tab.documentId} />
         ) : mode === "tree" ? (
           <GraphView />
         ) : mode === "ai" ? (

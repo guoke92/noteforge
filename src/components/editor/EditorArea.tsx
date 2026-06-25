@@ -1,27 +1,18 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useEditorStore } from "@/store/editor";
 import type { EditorTab } from "@/store/editor";
 import { LargeFilePreview } from "./LargeFilePreview";
 import { TabBar } from "./TabBar";
 import { EditorStartupPlaceholder } from "./EditorStartupPlaceholder";
 import { WelcomeView } from "@/features/welcome/WelcomeView";
-import { isMarkdownTab } from "@/lib/editor-doc";
 import { ensureDocumentContentLoaded, getCore } from "@/core/runtime";
 import { hydrateDeferredTab } from "@/core/bridge/editor-sync";
 import { ensureMonacoSetup } from "@/lib/ensure-monaco-setup";
 import { useDocumentRecord } from "@/hooks/useDocumentContent";
 import { perfLog } from "@/lib/startup-perf";
 import { useStartupStore } from "@/store/startup";
-
-const MonacoEditor = lazy(() =>
-  import("./MonacoEditor").then((m) => ({ default: m.MonacoEditor })),
-);
-const MarkdownPanel = lazy(() =>
-  import("@/features/markdown/MarkdownPanel").then((m) => ({ default: m.MarkdownPanel })),
-);
-const JsonYamlPanel = lazy(() =>
-  import("./JsonYamlPanel").then((m) => ({ default: m.JsonYamlPanel })),
-);
+import { resolveEditorSurface } from "@/core/editor/surface-registry";
+import { TabStripApiContext, type TabStripApi } from "@/contexts/tab-strip-api";
 
 interface PaneProps {
   paneId: string;
@@ -89,6 +80,13 @@ function ActiveContent({ tab }: { tab: EditorTab }) {
     };
   }, [tab.id, tab.pendingRestore, splashVisible]);
 
+  const resolvedDoc = doc ?? getCore().document.get(tab.documentId);
+
+  const Surface = useMemo(() => {
+    if (!resolvedDoc) return null;
+    return resolveEditorSurface(tab, resolvedDoc);
+  }, [tab, resolvedDoc]);
+
   if (splashVisible || !editorReady) {
     return <EditorSurfacePlaceholder />;
   }
@@ -104,9 +102,11 @@ function ActiveContent({ tab }: { tab: EditorTab }) {
     );
   }
 
-  const resolvedDoc = doc ?? getCore().document.get(tab.documentId);
+  if (!resolvedDoc) {
+    return <EditorSurfacePlaceholder />;
+  }
 
-  if (resolvedDoc?.tier === "huge" && !resolvedDoc.contentLoaded) {
+  if (resolvedDoc.tier === "huge" && !resolvedDoc.contentLoaded) {
     return (
       <LargeFilePreview
         tab={tab}
@@ -127,25 +127,13 @@ function ActiveContent({ tab }: { tab: EditorTab }) {
     );
   }
 
-  if (isMarkdownTab(tab)) {
-    return (
-      <Suspense fallback={<EditorSurfacePlaceholder />}>
-        <MarkdownPanel tab={tab} />
-      </Suspense>
-    );
-  }
-
-  if (tab.language === "json" || tab.language === "yaml") {
-    return (
-      <Suspense fallback={<EditorSurfacePlaceholder />}>
-        <JsonYamlPanel tab={tab} />
-      </Suspense>
-    );
+  if (!Surface) {
+    return <EditorSurfacePlaceholder />;
   }
 
   return (
     <Suspense fallback={<EditorSurfacePlaceholder />}>
-      <MonacoEditor tab={tab} />
+      <Surface tab={tab} doc={resolvedDoc} />
     </Suspense>
   );
 }
@@ -157,13 +145,15 @@ export function EditorPane({ paneId }: PaneProps) {
   const activeId = useEditorStore((s) => s.activeTabIdByPane[paneId]);
   const setActivePane = useEditorStore((s) => s.setActivePane);
   const tab = tabs.find((t) => t.id === activeId) || tabs[0];
+  const [tabStripApi, setTabStripApi] = useState<TabStripApi | null>(null);
 
   return (
-    <div
-      className="flex h-full min-w-0 flex-1 flex-col"
-      onClick={() => setActivePane(paneId)}
-    >
-      <TabBar paneId={paneId} />
+    <TabStripApiContext.Provider value={tabStripApi}>
+      <div
+        className="flex h-full min-w-0 flex-1 flex-col"
+        onClick={() => setActivePane(paneId)}
+      >
+        <TabBar paneId={paneId} onApiReady={setTabStripApi} />
       <div className="relative min-h-0 flex-1 overflow-hidden">
         {!sessionRestored ? (
           <EditorStartupPlaceholder />
@@ -174,6 +164,7 @@ export function EditorPane({ paneId }: PaneProps) {
         )}
       </div>
     </div>
+    </TabStripApiContext.Provider>
   );
 }
 

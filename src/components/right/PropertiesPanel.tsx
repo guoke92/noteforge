@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { parseFrontMatter } from "@/lib/front-matter";
+import { markdownLanguageService } from "@/features/markdown-engine";
 import { escapeHtml } from "@/lib/utils";
 
 interface Props {
   content: string;
   filePath?: string;
+  documentId?: string;
 }
 
 function formatValue(value: unknown): string {
@@ -14,11 +15,14 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-export function PropertiesPanel({ content, filePath }: Props) {
+export function PropertiesPanel({ content, filePath, documentId }: Props) {
   const { meta, bodyLines } = useMemo(() => {
-    const { meta, body } = parseFrontMatter(content);
-    return { meta, bodyLines: body.split("\n").length };
-  }, [content]);
+    const doc = markdownLanguageService.parse(content, documentId);
+    return {
+      meta: doc.frontMatter,
+      bodyLines: doc.body.split("\n").length,
+    };
+  }, [content, documentId]);
 
   const fileName = filePath?.split("/").pop();
 
