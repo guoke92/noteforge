@@ -7,8 +7,8 @@ import type { LiveSurfaceHandle } from "./surface-handle";
  * NFEP: Surfaces never own canonical content — they emit patches upward.
  *
  * Surface modes:
- * - live:   Typora-style editing (CM6 Hybrid in P1)
- * - source: raw markdown / code text
+ * - live:   Route A WYSIWYG (TipTap / EditorDocument)
+ * - source: markdown source view on same EditorSurface
  */
 
 export interface EditorSurfaceProps {

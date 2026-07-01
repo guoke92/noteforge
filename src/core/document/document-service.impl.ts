@@ -122,6 +122,12 @@ export function createDocumentService(deps: DocumentServiceDeps): DocumentServic
     // disk is unchanged → draft is the latest user edit (skip O(n) content comparison).
     const currentMtime = diskMtime ?? diskRevision.split(":")[0] ?? "";
     const currentSize = diskByteSize ?? new TextEncoder().encode(diskContent).length;
+    const draftLooksLikeAccidentalEmpty =
+      draft.content.length === 0 && diskContent.trim().length > 0;
+    if (draftLooksLikeAccidentalEmpty) {
+      await deleteWorkspaceDraft(vaultPath);
+      return { content: diskContent, dirty: false };
+    }
     if (
       draft.diskMtime &&
       draft.diskSize !== undefined &&

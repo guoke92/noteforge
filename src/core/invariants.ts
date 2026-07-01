@@ -50,20 +50,21 @@ export const PHASE_0_DOD = [
   "Legacy scratch/session code path removed or bridged with deprecation",
 ] as const;
 
-/** NFEP Phase 0 — platform skeleton + Monaco markdown transitional. */
+/** NFEP Phase 0 — platform skeleton (Route A). */
 export const NFEP_P0_DOD = [
   "SurfaceRegistry resolves editor surfaces by content kind",
   "MarkdownLanguageService provides shared parse/outline/wikilink",
   "Milkdown/Crepe removed",
   "Surface modes are live | source only",
-  "Markdown live/source use Monaco until CM6 Hybrid (P1)",
+  "Markdown uses single EditorSurface (TipTap live + source textarea)",
 ] as const;
 
-/** NFEP Phase 1 — CM6 Typora-style hybrid (in progress). */
+/** NFEP Phase 1 — Route A single-root editor. */
 export const NFEP_P1_DOD = [
-  "Markdown live mode uses CM6 Hybrid IR (single buffer)",
-  "live ↔ source toggles CM6 decorations without remount",
+  "Markdown live mode uses TipTap single editor root (EditorDocument)",
+  "live ↔ source via MarkdownCodec serialize/parse with anchor mapping",
   "EditorHostService flushes surfaces on mode switch (ADR-005)",
+  "EditorSurface implements LiveSurfaceHandle",
   "Outline revealLine works in live without forcing source",
   "Wiki links render and navigate in live mode",
   "GFM tables editable in live mode",

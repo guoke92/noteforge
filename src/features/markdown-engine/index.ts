@@ -5,4 +5,6 @@ export {
   type WikiLinkRef,
 } from "./language-service";
 
-export { MarkdownHybridSurface } from "./MarkdownHybridSurface";
+export { EditorSurface } from "./editor/EditorSurface";
+export { parseMarkdown, serializeMarkdown } from "./codec";
+export type { EditorDocument, EditorBlock, ModeSwitchAnchor } from "./editor/schema";

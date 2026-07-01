@@ -23,7 +23,6 @@ import {
   scheduleScratchAutosave,
   ensureScratchFlushed,
   flushAllDirtyScratchBuffers,
-  cancelPendingScratchAutosave,
 } from "@/core/session/scratch-autosave";
 import { captureAllOpenTabViewStates, deactivateTab } from "@/core/session/tab-lifecycle";
 import { wireEditorStoreHost } from "@/core/bridge/editor-store-bridge";
@@ -149,15 +148,6 @@ async function processCloseTabQueue() {
         continue;
       }
       if (isDirty(tab)) {
-        if (tab.kind === "workspace" && tab.path) {
-          const { ensureWorkspaceDraftFlushed } = await import(
-            "@/core/session/workspace-draft-autosave"
-          );
-          await ensureWorkspaceDraftFlushed(tab.path);
-          closeTabQueue.shift();
-          await useEditorStore.getState().discardAndCloseTab(id);
-          continue;
-        }
         openConfirmCloseDialog(id);
         return;
       }
@@ -329,16 +319,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   requestCloseTab(id: string) {
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
-    if (tab.kind === "workspace" && isDirty(tab) && tab.path) {
-      void (async () => {
-        const { ensureWorkspaceDraftFlushed } = await import(
-          "@/core/session/workspace-draft-autosave"
-        );
-        await ensureWorkspaceDraftFlushed(tab.path!);
-        await get().discardAndCloseTab(id);
-      })();
-      return;
-    }
     if (isDirty(tab)) {
       openConfirmCloseDialog(id);
       return;

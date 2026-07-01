@@ -104,6 +104,14 @@ function ConfirmCloseDialog({ request }: { request: Extract<DialogRequest, { kin
       advanceAppExitQueue();
       return;
     }
+    const current = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    if (current?.kind === "workspace" && current.path) {
+      const { deleteWorkspaceDraft } = await import(
+        "@/core/session/workspace-draft-autosave"
+      );
+      await deleteWorkspaceDraft(current.path);
+      await revertTabChanges(tabId);
+    }
     await discardAndCloseTab(tabId);
   };
 

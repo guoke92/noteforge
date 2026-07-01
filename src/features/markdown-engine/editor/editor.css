@@ -1,0 +1,624 @@
+.markdown-editor-surface {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.markdown-editor-inner {
+  position: relative;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 20px 24px 48px 28px;
+}
+
+.markdown-editor-live .md-tiptap-editor {
+  outline: none;
+  min-height: 100%;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.markdown-editor-live .tiptap p {
+  margin: 0.5em 0;
+}
+
+.markdown-editor-live .tiptap h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 1em 0 0.5em;
+}
+
+.markdown-editor-live .tiptap h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0.9em 0 0.45em;
+}
+
+.markdown-editor-live .tiptap h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+}
+
+.markdown-editor-live .tiptap h4,
+.markdown-editor-live .tiptap h5,
+.markdown-editor-live .tiptap h6 {
+  font-weight: 600;
+  margin: 0.75em 0 0.35em;
+}
+
+/* Lists */
+.markdown-editor-live .tiptap ul,
+.markdown-editor-live .tiptap ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-editor-live .tiptap ul {
+  list-style-type: disc;
+}
+
+.markdown-editor-live .tiptap ol {
+  list-style-type: decimal;
+}
+
+.markdown-editor-live .tiptap li {
+  margin: 0.2em 0;
+}
+
+.markdown-editor-live .tiptap li p {
+  margin: 0;
+}
+
+.markdown-editor-live .tiptap ul ul,
+.markdown-editor-live .tiptap ol ul {
+  list-style-type: circle;
+}
+
+.markdown-editor-live .tiptap ul ul ul,
+.markdown-editor-live .tiptap ol ul ul,
+.markdown-editor-live .tiptap ul ol ul {
+  list-style-type: square;
+}
+
+/* Task lists */
+.markdown-editor-live .tiptap ul[data-type="taskList"],
+.markdown-editor-live .tiptap .md-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-editor-live .tiptap li[data-type="taskItem"],
+.markdown-editor-live .tiptap .md-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  list-style: none;
+}
+
+.markdown-editor-live .tiptap li[data-type="taskItem"] > label,
+.markdown-editor-live .tiptap .md-task-item > label {
+  flex: 0 0 auto;
+  margin-top: 0.25em;
+  user-select: none;
+}
+
+.markdown-editor-live .tiptap li[data-type="taskItem"] > div,
+.markdown-editor-live .tiptap .md-task-item > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.markdown-editor-live .tiptap li[data-type="taskItem"][data-checked="true"] > div,
+.markdown-editor-live .tiptap .md-task-item[data-checked="true"] > div {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+
+/* Code — Typora-inspired block */
+.markdown-editor-live .md-code-block {
+  position: relative;
+  margin: 0.85em 0;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  background: color-mix(in srgb, var(--color-bg-secondary) 92%, var(--color-bg-primary));
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+.markdown-editor-live .md-code-block.is-selected {
+  border-color: var(--color-accent, #3b82f6);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #3b82f6) 35%, transparent);
+}
+
+.markdown-editor-live .md-code-lang-select {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  max-width: 42%;
+  text-align: right;
+}
+
+.markdown-editor-live .md-code-lang-select:hover {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-bg-primary) 50%, transparent);
+}
+
+.markdown-editor-live .md-code-delete-btn {
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.markdown-editor-live .md-code-block-pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.markdown-editor-live .md-code-block-body {
+  display: block;
+  margin: 0;
+  padding: 10px 14px 12px;
+  padding-top: 24px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-primary);
+  background: transparent;
+}
+
+.markdown-editor-live .md-code-block[data-language="typescript"] .md-code-block-body,
+.markdown-editor-live .md-code-block[data-language="javascript"] .md-code-block-body,
+.markdown-editor-live .md-code-block[data-language="rust"] .md-code-block-body {
+  color: color-mix(in srgb, var(--color-text-primary) 95%, #7c3aed);
+}
+
+.markdown-editor-live .tiptap pre:not(.md-code-block-pre) {
+  background: var(--color-bg-secondary);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  margin: 0.75em 0;
+}
+
+.markdown-editor-live .tiptap pre code,
+.markdown-editor-live .tiptap .md-tiptap-code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+.markdown-editor-live .tiptap :not(pre) > code {
+  background: var(--color-bg-secondary);
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.markdown-editor-live .tiptap blockquote {
+  border-left: 3px solid var(--color-border);
+  margin: 0.5em 0;
+  padding: 0.35em 0 0.35em 1em;
+  color: var(--color-text-secondary);
+  border-radius: 0 6px 6px 0;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.markdown-editor-live .tiptap blockquote.md-block-active {
+  border-left-color: var(--color-accent, #3b82f6);
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 6%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-accent, #3b82f6);
+}
+
+/* Tables */
+.markdown-editor-live .tiptap .tableWrapper {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: visible;
+  margin: 0.75em 0;
+  padding: 10px;
+}
+
+.markdown-editor-live .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 100%;
+}
+
+.markdown-editor-live .tiptap th,
+.markdown-editor-live .tiptap td {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  vertical-align: top;
+  min-width: 3rem;
+}
+
+.markdown-editor-live .tiptap th {
+  background: var(--color-bg-secondary);
+  font-weight: 600;
+}
+
+.markdown-editor-live .tiptap tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--color-bg-secondary) 40%, transparent);
+}
+
+.markdown-editor-live .tiptap .selectedCell::after {
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 15%, transparent);
+}
+
+.markdown-editor-live .tiptap td[align="center"],
+.markdown-editor-live .tiptap th[align="center"] {
+  text-align: center;
+}
+
+.markdown-editor-live .tiptap td[align="right"],
+.markdown-editor-live .tiptap th[align="right"] {
+  text-align: right;
+}
+
+.markdown-editor-live .tiptap td[align="left"],
+.markdown-editor-live .tiptap th[align="left"] {
+  text-align: left;
+}
+
+/* Images */
+.markdown-editor-live .md-image-block {
+  margin: 0.75em 0;
+  text-align: center;
+}
+
+.markdown-editor-live .md-image-block.is-selected {
+  outline: 2px solid var(--color-accent, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.markdown-editor-live .md-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: zoom-in;
+  display: inline-block;
+}
+
+.markdown-editor-live .md-image-block--loading .md-image {
+  opacity: 0.4;
+  min-height: 120px;
+  background: var(--color-bg-secondary);
+}
+
+.markdown-editor-live .md-image-caption {
+  margin-top: 0.35em;
+  font-size: 0.85em;
+  color: var(--color-text-secondary);
+}
+
+.markdown-editor-live .md-image-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+}
+
+.markdown-editor-live .md-image-fallback-src {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8em;
+  word-break: break-all;
+  opacity: 0.8;
+}
+
+.markdown-editor-live .md-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 72%);
+  cursor: zoom-out;
+  padding: 24px;
+}
+
+.markdown-editor-live .md-image-lightbox-img {
+  max-width: min(96vw, 1200px);
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 35%);
+}
+
+.markdown-editor-live .tiptap hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.25em 0;
+}
+
+.markdown-editor-live .md-raw-block {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  background: var(--color-bg-secondary);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 0.5em 0;
+  color: var(--color-text-secondary);
+}
+
+.markdown-editor-live a {
+  color: var(--color-accent, #3b82f6);
+  text-decoration: none;
+}
+
+.markdown-editor-live a:hover {
+  text-decoration: underline;
+}
+
+.markdown-source-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 20px 24px 48px;
+  box-sizing: border-box;
+  tab-size: 2;
+}
+
+.markdown-editor-source {
+  display: flex;
+  flex-direction: column;
+}
+
+.markdown-editor-live .tiptap p.is-editor-empty:first-child::before {
+  color: var(--color-text-tertiary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Block chrome — selection handles & actions */
+.markdown-editor-live .md-block-handle {
+  position: absolute;
+  left: -20px;
+  top: 6px;
+  width: 12px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.15s ease;
+}
+
+.markdown-editor-live .md-block-handle::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--color-text-tertiary);
+  box-shadow: 4px 0 0 var(--color-text-tertiary);
+}
+
+.markdown-editor-live .md-code-block:hover .md-block-handle,
+.markdown-editor-live .md-code-block.is-selected .md-block-handle,
+.markdown-editor-live .md-image-block:hover .md-block-handle,
+.markdown-editor-live .md-image-block.is-selected .md-block-handle {
+  opacity: 0.85;
+}
+
+.markdown-editor-live .md-block-delete-btn {
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.markdown-editor-live .md-block-delete-btn:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+/* Block active state (Notion / Typora-like) */
+.markdown-editor-live .md-block-active {
+  outline: 1px solid color-mix(in srgb, var(--color-accent, #3b82f6) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.markdown-editor-live .tableWrapper.md-block-active {
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.markdown-editor-live .md-code-block.md-block-active,
+.markdown-editor-live .md-code-block.is-selected {
+  outline: none;
+  border-color: var(--color-accent, #3b82f6);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #3b82f6) 35%, transparent);
+}
+
+.markdown-editor-live ul.md-block-active,
+.markdown-editor-live ol.md-block-active {
+  outline: 1px solid color-mix(in srgb, var(--color-accent, #3b82f6) 35%, transparent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.markdown-editor-live figure.md-image-block.md-block-active,
+.markdown-editor-live figure.md-image-block.is-selected {
+  outline: 1px solid color-mix(in srgb, var(--color-accent, #3b82f6) 35%, transparent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* Block hover actions (drag + delete on selected block) */
+.markdown-editor-live .md-block-actions {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 8;
+  padding: 2px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  pointer-events: auto;
+}
+
+.markdown-editor-live .md-block-action-handle,
+.markdown-editor-live .md-block-action-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.markdown-editor-live .md-block-action-handle {
+  cursor: grab;
+}
+
+.markdown-editor-live .md-block-action-handle:hover,
+.markdown-editor-live .md-block-action-delete:hover {
+  background: color-mix(in srgb, var(--color-bg-secondary) 80%, transparent);
+  color: var(--color-text-primary);
+}
+
+.markdown-editor-live .md-block-action-delete:hover {
+  color: #ef4444;
+}
+
+.markdown-editor-live .md-block-drag-placeholder {
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 12%, transparent);
+  border-radius: 6px;
+}
+
+/* Table edge + buttons — hover zones only, no layout shift */
+.markdown-editor-live .md-table-edge-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.markdown-editor-live .md-table-edge-zone {
+  position: absolute;
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown-editor-live .md-table-edge-zone--top,
+.markdown-editor-live .md-table-edge-zone--bottom {
+  width: 18px;
+  height: 14px;
+}
+
+.markdown-editor-live .md-table-edge-zone--left,
+.markdown-editor-live .md-table-edge-zone--right {
+  width: 14px;
+  height: 18px;
+}
+
+.markdown-editor-live .md-table-edge-plus {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 12%);
+  padding: 0;
+}
+
+.markdown-editor-live .md-table-edge-plus:hover {
+  color: var(--color-accent, #3b82f6);
+  border-color: var(--color-accent, #3b82f6);
+  background: var(--color-bg-primary);
+}
+
+.markdown-editor-live .md-image-meta {
+  margin-top: 8px;
+}
+
+.markdown-editor-live .md-image-title-btn,
+.markdown-editor-live .md-image-title-input {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--color-bg-secondary);
+}
+
+.markdown-editor-live .md-image-title-btn {
+  cursor: pointer;
+}

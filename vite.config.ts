@@ -25,13 +25,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           monaco: ["monaco-editor", "@monaco-editor/react"],
-          codemirror: [
-            "@codemirror/state",
-            "@codemirror/view",
-            "@codemirror/lang-markdown",
-            "@codemirror/language",
-            "@codemirror/commands",
-          ],
+          tiptap: ["@tiptap/react", "@tiptap/starter-kit", "@tiptap/core", "@tiptap/extension-table"],
           radix: [
             "@radix-ui/react-dialog",
             "@radix-ui/react-dropdown-menu",

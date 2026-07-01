@@ -20,6 +20,13 @@ const draftFlush = createDebouncedFlush<string>({
     const doc = getCore().document.list().find((d) => d.vaultPath === vaultPath);
     if (!doc?.vaultPath || !doc.dirty || !doc.contentLoaded) return;
 
+    const looksLikeAccidentalEmptyDraft =
+      doc.content.length === 0 && (doc.disk?.content.trim().length ?? 0) > 0;
+    if (looksLikeAccidentalEmptyDraft) {
+      await deleteWorkspaceDraft(vaultPath);
+      return;
+    }
+
     const payload: WorkspaceDraftPayload = {
       vaultPath,
       content: doc.content,

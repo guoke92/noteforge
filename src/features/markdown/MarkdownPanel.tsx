@@ -2,16 +2,14 @@ import { useEffect } from "react";
 import type { EditorTab } from "@/store/editor";
 import { useEditorStore } from "@/store/editor";
 import { getCore } from "@/core/runtime";
-import { MarkdownHybridSurface } from "@/features/markdown-engine/MarkdownHybridSurface";
+import { EditorSurface } from "@/features/markdown-engine/editor/EditorSurface";
 
 interface Props {
   tab: EditorTab;
 }
 
 /**
- * Markdown surface (NFEP P1):
- * - live:   CM6 Hybrid IR (Typora-style)
- * - source: same CM6 buffer, decorations off
+ * Markdown surface — Route A single EditorSurface (live WYSIWYG + source).
  */
 export function MarkdownPanel({ tab }: Props) {
   const revealLineRequest = useEditorStore((s) => s.revealLineRequest);
@@ -34,5 +32,5 @@ export function MarkdownPanel({ tab }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [revealLineRequest, tab.id, tab.documentId, consumeRevealLine]);
 
-  return <MarkdownHybridSurface tab={tab} />;
+  return <EditorSurface tab={tab} />;
 }

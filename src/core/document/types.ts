@@ -4,7 +4,7 @@ import type { FileTier } from "./file-tier";
 /** ADR-001: Canonical persisted form is always Markdown text. */
 export type DocumentContent = string;
 
-/** NFEP: live = Typora-style editing (CM6 in P1); source = raw markdown text. */
+/** NFEP: live = Route A WYSIWYG; source = markdown text view on same surface. */
 export type EditorSurfaceMode = "live" | "source";
 
 export type EndOfLine = "lf" | "crlf";
